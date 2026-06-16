@@ -24,6 +24,11 @@ set -e
 : "${DOMAINS:=}"
 : "${DIRECT_IPS:=}"
 
+# ===== API support =====
+: "${API_PORT:=9090}"
+: "${SINGBOX_API_PORT:=20123}"
+: "${SINGBOX_API_TOKEN:=}"
+
 # ===== Subscription support =====
 : "${SUB_URL:=}"
 : "${SUB_SELECT:=auto}"
@@ -329,21 +334,31 @@ jq -n \
   --arg log_level "$LOG_LEVEL" \
   --argjson tun_mtu "$TUN_MTU" \
   --arg tun_stack "$TUN_STACK" \
+  --arg clash_api_addr "127.0.0.1" \
+  --arg clash_api_port "$SINGBOX_API_PORT" \
   '{
     log: {level: $log_level, timestamp: true},
     dns: $dns,
-    inbounds: [{
-      type: "tun",
-      tag: "tun-in",
-      interface_name: "tun0",
-      address: ["198.18.0.1/30"],
-      mtu: $tun_mtu,
-      auto_route: true,
-      auto_redirect: true,
-      strict_route: true,
-      stack: $tun_stack,
-      route_exclude_address: ["192.168.0.0/16", "172.16.0.0/12", "10.0.0.0/8", "fc00::/7"]
-    }],
+    inbounds: [
+      {
+        type: "tun",
+        tag: "tun-in",
+        interface_name: "tun0",
+        address: ["198.18.0.1/30"],
+        mtu: $tun_mtu,
+        auto_route: true,
+        auto_redirect: true,
+        strict_route: true,
+        stack: $tun_stack,
+        route_exclude_address: ["192.168.0.0/16", "172.16.0.0/12", "10.0.0.0/8", "fc00::/7"]
+      },
+      {
+        type: "mixed",
+        tag: "clash-api",
+        listen: $clash_api_addr,
+        listen_port: ($clash_api_port | tonumber)
+      }
+    ],
     outbounds: [$outbound, {tag: "direct", type: "direct"}, {tag: "block", type: "block"}],
     route: {
       default_domain_resolver: "dns-local",
@@ -352,7 +367,13 @@ jq -n \
       rules: $rules,
       final: $final
     },
-    experimental: {cache_file: {enabled: true}}
+    experimental: {
+      cache_file: {enabled: true},
+      clash_api: {
+        external_controller: ($clash_api_addr + ":" + $clash_api_port),
+        default_mode: "Global"
+      }
+    }
   }' > /sing-box.json
 
 echo "Config generated:"
@@ -363,72 +384,28 @@ echo "Validating..."
 sing-box check -c /sing-box.json --disable-color || exit 1
 echo "OK. Starting sing-box..."
 
-# SUB_REFRESH - background subscription refresh with hot-reload
-if [ -n "$SUB_URL" ] && [ "$SUB_REFRESH" != "0" ]; then
-    REFRESH_SEC=0
-    case "$SUB_REFRESH" in
-        *[0-9]m) REFRESH_SEC=$(echo "$SUB_REFRESH" | sed 's/[^0-9]//g') ; REFRESH_SEC=$((REFRESH_SEC * 60)) ;;
-        *[0-9]h) REFRESH_SEC=$(echo "$SUB_REFRESH" | sed 's/[^0-9]//g') ; REFRESH_SEC=$((REFRESH_SEC * 3600)) ;;
-        *[0-9]s) REFRESH_SEC=$(echo "$SUB_REFRESH" | sed 's/[^0-9]//g') ;;
-        *) REFRESH_SEC=3600 ;;
-    esac
-    
-    echo "Subscription refresh: every ${REFRESH_SEC}s"
-    
-    (
-        RR_IDX=0
-        while true; do
-            sleep "$REFRESH_SEC"
-            echo "Refreshing subscription..."
-            
-            NEW_CONTENT=$(wget -qO- --user-agent="$SUB_USER_AGENT" --timeout=15 "$SUB_URL" 2>/dev/null) || continue
-            NEW_DECODED="$NEW_CONTENT"
-            B64_NEW=$(echo "$NEW_CONTENT" | base64 -d 2>/dev/null || true)
-            [ -n "$B64_NEW" ] && echo "$B64_NEW" | grep -q "://" && NEW_DECODED="$B64_NEW"
-            NEW_LINKS=$(echo "$NEW_DECODED" | grep -oE '(hysteria2|vless|vmess|trojan|ss)://[^[:space:]"<>,]+' || true)
-            [ -z "$NEW_LINKS" ] && continue
-            
-            # Round-robin selection
-            if [ "$SUB_SELECT" = "round-robin" ]; then
-                TOTAL=$(echo "$NEW_LINKS" | wc -l)
-                RR_IDX=$(( (RR_IDX + 1) % TOTAL ))
-                NEW_SELECTED=$(echo "$NEW_LINKS" | sed -n "$((RR_IDX + 1))p")
-                echo "Round-robin: server $((RR_IDX + 1)) of $TOTAL"
-            else
-                NEW_SELECTED=$(echo "$NEW_LINKS" | head -1)
-            fi
-            
-            OLD_SELECTED=""
-            [ -f /tmp/.sub_selected ] && OLD_SELECTED=$(cat /tmp/.sub_selected)
-            
-            if [ "$NEW_SELECTED" = "$OLD_SELECTED" ]; then
-                echo "Subscription unchanged, skipping"
-                continue
-            fi
-            
-            echo "Subscription updated, reloading..."
-            echo "$NEW_SELECTED" > /tmp/.sub_selected
-            
-            # Signal sing-box to reload via SIGHUP
-            SINGBOX_PID=$(cat /tmp/.singbox_pid 2>/dev/null)
-            if [ -n "$SINGBOX_PID" ] && kill -0 "$SINGBOX_PID" 2>/dev/null; then
-                kill -HUP "$SINGBOX_PID" 2>/dev/null || {
-                    echo "Reload failed, restarting..."
-                    kill -TERM "$SINGBOX_PID" 2>/dev/null
-                    sleep 2
-                    exec /entrypoint.sh
-                }
-            else
-                echo "sing-box not running, restarting..."
-                exec /entrypoint.sh
-            fi
-        done
-    ) &
+# Start sing-box in background
+/usr/local/bin/sing-box run -c /sing-box.json > /tmp/sing-box.log 2>&1 &
+SINGBOX_PID=$!
+echo "$SINGBOX_PID" > /tmp/.singbox_pid
+
+echo "sing-box started (PID: $SINGBOX_PID)"
+
+# Start management API
+export SINGBOX_API_ADDR="127.0.0.1:${SINGBOX_API_PORT}"
+export SINGBOX_API_TOKEN="${SINGBOX_API_TOKEN}"
+python3 /api_server.py &
+API_PID=$!
+echo "Management API started (PID: $API_PID, port: ${API_PORT})"
+
+# Wait for either process to exit
+wait -n $SINGBOX_PID $API_PID
+EXIT_CODE=$?
+if [ $EXIT_CODE -eq 0 ]; then
+    echo "sing-box exited, stopping API..."
+    kill $API_PID 2>/dev/null
+else
+    echo "API exited, stopping sing-box..."
+    kill $SINGBOX_PID 2>/dev/null
 fi
-
-[ -n "$URL" ] && echo "$URL" > /tmp/.sub_selected
-[ -n "$REMOTE_ADDRESS" ] && echo "vless://${ID}@${REMOTE_ADDRESS}:${REMOTE_PORT}" > /tmp/.sub_selected
-
-echo $$ > /tmp/.singbox_pid 2>/dev/null || true
-
-exec /usr/local/bin/sing-box run -c /sing-box.json
+wait
