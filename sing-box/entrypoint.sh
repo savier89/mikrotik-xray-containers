@@ -29,6 +29,17 @@ set -e
 : "${SUB_SELECT:=auto}"
 : "${SUB_REFRESH:=0}"
 : "${SUB_USER_AGENT:=curl/8.0.0}"
+: "${SUB_TEST_TIMEOUT:=5}"
+: "${SUB_TEST_COUNT:=3}"
+
+# SUB_SELECT modes:
+#   auto        - first server from list
+#   first       - same as auto
+#   index:N / idx:N - select N-th server (1-based)
+#   protocol:X / proto:X - first server matching protocol (vless/hysteria2/trojan/vmess)
+#   random      - random server from list
+#   fastest     - ping test, select fastest (requires SUB_TEST_COUNT)
+#   round-robin - rotate through servers on each refresh
 
 parse_subscription() {
     echo "Fetching subscription..."
@@ -64,6 +75,37 @@ parse_subscription() {
         protocol:*|proto:*)
             PROTO_FILTER=$(echo "$SUB_SELECT" | cut -d: -f2)
             SELECTED=$(echo "$LINKS" | grep -i "$PROTO_FILTER" | head -1)
+            ;;
+        random)
+            TOTAL=$(echo "$LINKS" | wc -l)
+            RAND_LINE=$(( (RANDOM % TOTAL) + 1 ))
+            SELECTED=$(echo "$LINKS" | sed -n "${RAND_LINE}p")
+            echo "Random selection: line $RAND_LINE of $TOTAL"
+            ;;
+        fastest)
+            echo "Testing servers (timeout: ${SUB_TEST_TIMEOUT}s, attempts: ${SUB_TEST_COUNT})..."
+            BEST_TIME=999999
+            BEST_LINK=""
+            echo "$LINKS" | while IFS= read -r link; do
+                SRV=$(echo "$link" | sed -n 's|.*@\([^:]*\).*|\1|p')
+                [ -z "$SRV" ] && continue
+                # Test latency with wget
+                START=$(date +%s%N 2>/dev/null || echo "0")
+                wget -qO- --timeout="$SUB_TEST_TIMEOUT" --tries="$SUB_TEST_COUNT" "https://$SRV" 2>/dev/null && {
+                    END=$(date +%s%N 2>/dev/null || echo "0")
+                    if [ "$START" != "0" ] && [ "$END" != "0" ]; then
+                        LATENCY=$(( (END - START) / 1000000 ))
+                        echo "  $SRV: ${LATENCY}ms"
+                        if [ "$LATENCY" -lt "$BEST_TIME" ]; then
+                            BEST_TIME=$LATENCY
+                            BEST_LINK="$link"
+                        fi
+                    fi
+                } || echo "  $SRV: timeout"
+            done
+            # Fallback to first if no test succeeded
+            SELECTED=$(cat /tmp/.fastest_link 2>/dev/null || echo "$LINKS" | head -1)
+            [ -z "$SELECTED" ] && SELECTED=$(echo "$LINKS" | head -1)
             ;;
         auto|first|"")
             SELECTED=$(echo "$LINKS" | head -1)
@@ -321,7 +363,7 @@ echo "Validating..."
 sing-box check -c /sing-box.json --disable-color || exit 1
 echo "OK. Starting sing-box..."
 
-# SUB_REFRESH
+# SUB_REFRESH - background subscription refresh with hot-reload
 if [ -n "$SUB_URL" ] && [ "$SUB_REFRESH" != "0" ]; then
     REFRESH_SEC=0
     case "$SUB_REFRESH" in
@@ -334,6 +376,7 @@ if [ -n "$SUB_URL" ] && [ "$SUB_REFRESH" != "0" ]; then
     echo "Subscription refresh: every ${REFRESH_SEC}s"
     
     (
+        RR_IDX=0
         while true; do
             sleep "$REFRESH_SEC"
             echo "Refreshing subscription..."
@@ -345,18 +388,40 @@ if [ -n "$SUB_URL" ] && [ "$SUB_REFRESH" != "0" ]; then
             NEW_LINKS=$(echo "$NEW_DECODED" | grep -oE '(hysteria2|vless|vmess|trojan|ss)://[^[:space:]"<>,]+' || true)
             [ -z "$NEW_LINKS" ] && continue
             
+            # Round-robin selection
+            if [ "$SUB_SELECT" = "round-robin" ]; then
+                TOTAL=$(echo "$NEW_LINKS" | wc -l)
+                RR_IDX=$(( (RR_IDX + 1) % TOTAL ))
+                NEW_SELECTED=$(echo "$NEW_LINKS" | sed -n "$((RR_IDX + 1))p")
+                echo "Round-robin: server $((RR_IDX + 1)) of $TOTAL"
+            else
+                NEW_SELECTED=$(echo "$NEW_LINKS" | head -1)
+            fi
+            
             OLD_SELECTED=""
             [ -f /tmp/.sub_selected ] && OLD_SELECTED=$(cat /tmp/.sub_selected)
-            
-            NEW_SELECTED=$(echo "$NEW_LINKS" | head -1)
             
             if [ "$NEW_SELECTED" = "$OLD_SELECTED" ]; then
                 echo "Subscription unchanged, skipping"
                 continue
             fi
             
-            echo "Subscription updated"
-            kill -TERM $(cat /tmp/.singbox_pid 2>/dev/null) 2>/dev/null || exit 0
+            echo "Subscription updated, reloading..."
+            echo "$NEW_SELECTED" > /tmp/.sub_selected
+            
+            # Signal sing-box to reload via SIGHUP
+            SINGBOX_PID=$(cat /tmp/.singbox_pid 2>/dev/null)
+            if [ -n "$SINGBOX_PID" ] && kill -0 "$SINGBOX_PID" 2>/dev/null; then
+                kill -HUP "$SINGBOX_PID" 2>/dev/null || {
+                    echo "Reload failed, restarting..."
+                    kill -TERM "$SINGBOX_PID" 2>/dev/null
+                    sleep 2
+                    exec /entrypoint.sh
+                }
+            else
+                echo "sing-box not running, restarting..."
+                exec /entrypoint.sh
+            fi
         done
     ) &
 fi
