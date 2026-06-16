@@ -400,7 +400,7 @@ export SINGBOX_API_ADDR="127.0.0.1:${SINGBOX_API_PORT}"
 export SINGBOX_API_TOKEN="${SINGBOX_API_TOKEN}"
 export API_AUTH_TOKEN="${API_AUTH_TOKEN}"
 export API_HOST="${API_HOST}"
-python3 /api_server.py &
+/usr/local/bin/api_server &
 API_PID=$!
 echo "Management API started (PID: $API_PID, port: ${API_HOST}:${API_PORT})"
 
