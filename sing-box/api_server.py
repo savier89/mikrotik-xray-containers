@@ -128,7 +128,8 @@ def fetch_subscription(sub_url, user_agent='curl/8.0.0'):
 def parse_servers(content):
     """Parse server links from subscription content."""
     import re
-    servers = re.findall(r'(hysteria2|vless|vmess|trojan|ss)://[^[:space:]"<>,]+', content)
+    # Match full URLs including fragments (#)
+    servers = re.findall(r'(?:hysteria2|vless|vmess|trojan|ss)://[^\s"<,]+', content)
     return servers
 
 def test_server_latency(server_url, timeout=5):

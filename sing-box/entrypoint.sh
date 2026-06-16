@@ -3,6 +3,12 @@
 # Generates /sing-box.json from ENV, validates, runs sing-box
 # Compatible with ash/dash (Alpine)
 
+# Support running tests (generate config first, then run command)
+if [ "$1" = "test" ] || [ "$1" = "sh" ] || [ "$1" = "python3" ]; then
+    # Generate config first
+    GENERATE_CONFIG=true
+fi
+
 set -e
 
 : "${REMOTE_PORT:=443}"
@@ -36,15 +42,6 @@ set -e
 : "${SUB_USER_AGENT:=curl/8.0.0}"
 : "${SUB_TEST_TIMEOUT:=5}"
 : "${SUB_TEST_COUNT:=3}"
-
-# SUB_SELECT modes:
-#   auto        - first server from list
-#   first       - same as auto
-#   index:N / idx:N - select N-th server (1-based)
-#   protocol:X / proto:X - first server matching protocol (vless/hysteria2/trojan/vmess)
-#   random      - random server from list
-#   fastest     - ping test, select fastest (requires SUB_TEST_COUNT)
-#   round-robin - rotate through servers on each refresh
 
 parse_subscription() {
     echo "Fetching subscription..."
@@ -94,7 +91,6 @@ parse_subscription() {
             echo "$LINKS" | while IFS= read -r link; do
                 SRV=$(echo "$link" | sed -n 's|.*@\([^:]*\).*|\1|p')
                 [ -z "$SRV" ] && continue
-                # Test latency with wget
                 START=$(date +%s%N 2>/dev/null || echo "0")
                 wget -qO- --timeout="$SUB_TEST_TIMEOUT" --tries="$SUB_TEST_COUNT" "https://$SRV" 2>/dev/null && {
                     END=$(date +%s%N 2>/dev/null || echo "0")
@@ -108,7 +104,6 @@ parse_subscription() {
                     fi
                 } || echo "  $SRV: timeout"
             done
-            # Fallback to first if no test succeeded
             SELECTED=$(cat /tmp/.fastest_link 2>/dev/null || echo "$LINKS" | head -1)
             [ -z "$SELECTED" ] && SELECTED=$(echo "$LINKS" | head -1)
             ;;
@@ -382,7 +377,14 @@ echo ""
 
 echo "Validating..."
 sing-box check -c /sing-box.json --disable-color || exit 1
-echo "OK. Starting sing-box..."
+echo "OK."
+
+# If running tests, execute the command instead of starting sing-box
+if [ "$GENERATE_CONFIG" = "true" ]; then
+    exec "$@"
+fi
+
+echo "Starting sing-box..."
 
 # Start sing-box in background
 /usr/local/bin/sing-box run -c /sing-box.json > /tmp/sing-box.log 2>&1 &

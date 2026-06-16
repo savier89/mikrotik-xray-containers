@@ -13,8 +13,9 @@ RUN apk add --no-cache wget jq ca-certificates python3 \
 
 COPY entrypoint.sh /entrypoint.sh
 COPY api_server.py /api_server.py
+COPY tests/ /tests/
 
-RUN chmod +x /entrypoint.sh /api_server.py
+RUN chmod +x /entrypoint.sh /api_server.py /tests/*.sh
 
 EXPOSE 9090/tcp
 EXPOSE 20123/tcp
