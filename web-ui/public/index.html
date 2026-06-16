@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sing-Box Manager</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <div class="app">
+        <header class="header">
+            <div class="header-left">
+                <h1 class="logo">
+                    <span class="logo-icon">◈</span>
+                    SING-BOX
+                    <span class="logo-sub">MANAGER</span>
+                </h1>
+            </div>
+            <div class="header-right">
+                <div class="connection-status" id="connectionStatus">
+                    <span class="status-dot disconnected"></span>
+                    <span class="status-text">DISCONNECTED</span>
+                </div>
+                <button class="btn-icon" id="settingsBtn" title="Settings">⚙</button>
+            </div>
+        </header>
+
+        <main class="main">
+            <div class="dashboard">
+                <!-- Status Panel -->
+                <section class="panel status-panel">
+                    <div class="panel-header">
+                        <h2>SYSTEM STATUS</h2>
+                        <span class="panel-badge" id="singboxStatus">OFFLINE</span>
+                    </div>
+                    <div class="status-grid">
+                        <div class="status-item">
+                            <span class="status-label">UPTIME</span>
+                            <span class="status-value" id="uptime">--</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">PID</span>
+                            <span class="status-value" id="pid">--</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">SUBSCRIPTIONS</span>
+                            <span class="status-value" id="subsCount">0</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">SERVERS</span>
+                            <span class="status-value" id="serversCount">0</span>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Traffic Panel -->
+                <section class="panel traffic-panel">
+                    <div class="panel-header">
+                        <h2>TRAFFIC</h2>
+                        <span class="panel-badge live">LIVE</span>
+                    </div>
+                    <div class="traffic-grid">
+                        <div class="traffic-item upload">
+                            <div class="traffic-icon">↑</div>
+                            <div class="traffic-info">
+                                <span class="traffic-label">UPLOAD</span>
+                                <span class="traffic-value" id="upload">0 B</span>
+                            </div>
+                        </div>
+                        <div class="traffic-item download">
+                            <div class="traffic-icon">↓</div>
+                            <div class="traffic-info">
+                                <span class="traffic-label">DOWNLOAD</span>
+                                <span class="traffic-value" id="download">0 B</span>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Connections Panel -->
+                <section class="panel connections-panel">
+                    <div class="panel-header">
+                        <h2>CONNECTIONS</h2>
+                        <span class="panel-badge" id="connectionsCount">0</span>
+                    </div>
+                    <div class="connections-list" id="connectionsList">
+                        <div class="empty-state">No active connections</div>
+                    </div>
+                </section>
+
+                <!-- Subscriptions Panel -->
+                <section class="panel subscriptions-panel">
+                    <div class="panel-header">
+                        <h2>SUBSCRIPTIONS</h2>
+                        <button class="btn-primary" id="addSubBtn">+ ADD</button>
+                    </div>
+                    <div class="subscriptions-list" id="subscriptionsList">
+                        <div class="empty-state">No subscriptions</div>
+                    </div>
+                </section>
+
+                <!-- Servers Panel -->
+                <section class="panel servers-panel">
+                    <div class="panel-header">
+                        <h2>SERVERS</h2>
+                        <div class="server-controls">
+                            <button class="btn-secondary" id="testServersBtn">TEST</button>
+                        </div>
+                    </div>
+                    <div class="servers-list" id="serversList">
+                        <div class="empty-state">No servers</div>
+                    </div>
+                </section>
+
+                <!-- Logs Panel -->
+                <section class="panel logs-panel">
+                    <div class="panel-header">
+                        <h2>LOGS</h2>
+                        <button class="btn-icon" id="clearLogsBtn" title="Clear">✕</button>
+                    </div>
+                    <div class="logs-container" id="logsContainer">
+                        <div class="empty-state">No logs</div>
+                    </div>
+                </section>
+            </div>
+        </main>
+
+        <!-- Settings Modal -->
+        <div class="modal" id="settingsModal">
+            <div class="modal-backdrop" id="modalBackdrop"></div>
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>API SETTINGS</h2>
+                    <button class="btn-icon" id="closeSettingsBtn">✕</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="apiUrl">API URL</label>
+                        <input type="text" id="apiUrl" placeholder="http://172.16.1.100:9090" value="">
+                    </div>
+                    <div class="form-group">
+                        <label for="apiToken">Auth Token</label>
+                        <input type="password" id="apiToken" placeholder="Bearer token" value="">
+                    </div>
+                    <div class="form-group">
+                        <label for="refreshRate">Refresh Rate (ms)</label>
+                        <input type="number" id="refreshRate" value="3000" min="1000" max="30000" step="1000">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn-secondary" id="cancelSettingsBtn">CANCEL</button>
+                    <button class="btn-primary" id="saveSettingsBtn">SAVE</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Add Subscription Modal -->
+        <div class="modal" id="addSubModal">
+            <div class="modal-backdrop" id="addSubBackdrop"></div>
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>ADD SUBSCRIPTION</h2>
+                    <button class="btn-icon" id="closeAddSubBtn">✕</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="subName">Name</label>
+                        <input type="text" id="subName" placeholder="My Subscription">
+                    </div>
+                    <div class="form-group">
+                        <label for="subUrl">URL</label>
+                        <input type="text" id="subUrl" placeholder="https://sub.example.com/api/sub/...">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn-secondary" id="cancelAddSubBtn">CANCEL</button>
+                    <button class="btn-primary" id="saveAddSubBtn">ADD</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/api.js"></script>
+    <script src="/js/app.js"></script>
+</body>
+</html>
