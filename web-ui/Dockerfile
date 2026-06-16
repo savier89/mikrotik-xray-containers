@@ -1,29 +1,18 @@
-FROM golang:1.21-alpine AS builder
+FROM node:20-alpine AS builder
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY . .
+RUN npm run build
 
+FROM golang:1.21-alpine AS go-builder
 WORKDIR /build
-
-# Install dependencies
-RUN apk add --no-cache git
-
-# Copy and build
 COPY go.mod .
 COPY server.go .
-COPY public/ ./public/
+COPY --from=builder /app/dist ./dist
+RUN CGO_ENABLED=0 go build -o server .
 
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o web-ui .
-
-# Final stage
-FROM alpine:3.21
-
-RUN apk add --no-cache ca-certificates
-
-WORKDIR /app
-
-# Copy binary
-COPY --from=builder /build/web-ui .
-
+FROM scratch
+COPY --from=go-builder /build/server /server
 EXPOSE 8080
-
-ENV PORT=8080
-
-CMD ["./web-ui"]
+CMD ["/server"]
