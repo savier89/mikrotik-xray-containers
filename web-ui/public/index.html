@@ -5,181 +5,359 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sing-Box Manager</title>
     <link rel="stylesheet" href="/css/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 </head>
 <body>
+    <!-- Animated background -->
+    <canvas id="bgCanvas"></canvas>
+    <div class="bg-overlay"></div>
+
     <div class="app">
-        <header class="header">
-            <div class="header-left">
-                <h1 class="logo">
-                    <span class="logo-icon">◈</span>
-                    SING-BOX
-                    <span class="logo-sub">MANAGER</span>
-                </h1>
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="brand">
+                    <span class="brand-icon">⚡</span>
+                    <div class="brand-text">
+                        <span class="brand-name">SING-BOX</span>
+                        <span class="brand-sub">MANAGER</span>
+                    </div>
+                </div>
             </div>
-            <div class="header-right">
+
+            <nav class="sidebar-nav">
+                <a href="#dashboard" class="nav-item active" data-page="dashboard">
+                    <span class="nav-icon">◉</span>
+                    <span class="nav-label">Dashboard</span>
+                </a>
+                <a href="#subscriptions" class="nav-item" data-page="subscriptions">
+                    <span class="nav-icon">◈</span>
+                    <span class="nav-label">Subscriptions</span>
+                </a>
+                <a href="#servers" class="nav-item" data-page="servers">
+                    <span class="nav-icon">◎</span>
+                    <span class="nav-label">Servers</span>
+                </a>
+                <a href="#config" class="nav-item" data-page="config">
+                    <span class="nav-icon">⚙</span>
+                    <span class="nav-label">Configuration</span>
+                </a>
+                <a href="#statistics" class="nav-item" data-page="statistics">
+                    <span class="nav-icon">◐</span>
+                    <span class="nav-label">Statistics</span>
+                </a>
+                <a href="#logs" class="nav-item" data-page="logs">
+                    <span class="nav-icon">▤</span>
+                    <span class="nav-label">Logs</span>
+                </a>
+            </nav>
+
+            <div class="sidebar-footer">
                 <div class="connection-status" id="connectionStatus">
                     <span class="status-dot disconnected"></span>
                     <span class="status-text">DISCONNECTED</span>
                 </div>
                 <button class="btn-icon" id="settingsBtn" title="Settings">⚙</button>
             </div>
-        </header>
+        </aside>
 
+        <!-- Main content -->
         <main class="main">
-            <div class="dashboard">
-                <!-- Status Panel -->
-                <section class="panel status-panel">
-                    <div class="panel-header">
-                        <h2>SYSTEM STATUS</h2>
-                        <span class="panel-badge" id="singboxStatus">OFFLINE</span>
+            <!-- Dashboard page -->
+            <section class="page active" id="page-dashboard">
+                <div class="page-header">
+                    <h1>Dashboard</h1>
+                    <div class="page-actions">
+                        <span class="refresh-info">Auto-refresh: <span id="refreshRateDisplay">3s</span></span>
                     </div>
-                    <div class="status-grid">
-                        <div class="status-item">
-                            <span class="status-label">UPTIME</span>
-                            <span class="status-value" id="uptime">--</span>
-                        </div>
-                        <div class="status-item">
-                            <span class="status-label">PID</span>
-                            <span class="status-value" id="pid">--</span>
-                        </div>
-                        <div class="status-item">
-                            <span class="status-label">SUBSCRIPTIONS</span>
-                            <span class="status-value" id="subsCount">0</span>
-                        </div>
-                        <div class="status-item">
-                            <span class="status-label">SERVERS</span>
-                            <span class="status-value" id="serversCount">0</span>
-                        </div>
-                    </div>
-                </section>
+                </div>
 
-                <!-- Traffic Panel -->
-                <section class="panel traffic-panel">
-                    <div class="panel-header">
-                        <h2>TRAFFIC</h2>
-                        <span class="panel-badge live">LIVE</span>
-                    </div>
-                    <div class="traffic-grid">
-                        <div class="traffic-item upload">
-                            <div class="traffic-icon">↑</div>
-                            <div class="traffic-info">
-                                <span class="traffic-label">UPLOAD</span>
-                                <span class="traffic-value" id="upload">0 B</span>
-                            </div>
+                <div class="dashboard-grid">
+                    <!-- System status -->
+                    <div class="card status-card">
+                        <div class="card-header">
+                            <h3>System Status</h3>
+                            <span class="badge" id="singboxStatus">OFFLINE</span>
                         </div>
-                        <div class="traffic-item download">
-                            <div class="traffic-icon">↓</div>
-                            <div class="traffic-info">
-                                <span class="traffic-label">DOWNLOAD</span>
-                                <span class="traffic-value" id="download">0 B</span>
+                        <div class="card-body">
+                            <div class="status-row">
+                                <div class="status-item">
+                                    <span class="status-label">Uptime</span>
+                                    <span class="status-value" id="uptime">--</span>
+                                </div>
+                                <div class="status-item">
+                                    <span class="status-label">PID</span>
+                                    <span class="status-value" id="pid">--</span>
+                                </div>
+                                <div class="status-item">
+                                    <span class="status-label">Subscriptions</span>
+                                    <span class="status-value" id="subsCount">0</span>
+                                </div>
+                                <div class="status-item">
+                                    <span class="status-label">Servers</span>
+                                    <span class="status-value" id="serversCount">0</span>
+                                </div>
                             </div>
                         </div>
                     </div>
-                </section>
 
-                <!-- Connections Panel -->
-                <section class="panel connections-panel">
-                    <div class="panel-header">
-                        <h2>CONNECTIONS</h2>
-                        <span class="panel-badge" id="connectionsCount">0</span>
+                    <!-- Traffic -->
+                    <div class="card traffic-card">
+                        <div class="card-header">
+                            <h3>Traffic</h3>
+                            <span class="badge live">LIVE</span>
+                        </div>
+                        <div class="card-body">
+                            <div class="traffic-row">
+                                <div class="traffic-item upload">
+                                    <div class="traffic-icon">↑</div>
+                                    <div class="traffic-info">
+                                        <span class="traffic-label">Upload</span>
+                                        <span class="traffic-value" id="upload">0 B</span>
+                                    </div>
+                                </div>
+                                <div class="traffic-item download">
+                                    <div class="traffic-icon">↓</div>
+                                    <div class="traffic-info">
+                                        <span class="traffic-label">Download</span>
+                                        <span class="traffic-value" id="download">0 B</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="connections-list" id="connectionsList">
-                        <div class="empty-state">No active connections</div>
-                    </div>
-                </section>
 
-                <!-- Subscriptions Panel -->
-                <section class="panel subscriptions-panel">
-                    <div class="panel-header">
-                        <h2>SUBSCRIPTIONS</h2>
-                        <button class="btn-primary" id="addSubBtn">+ ADD</button>
+                    <!-- Active connection -->
+                    <div class="card connection-card">
+                        <div class="card-header">
+                            <h3>Active Connection</h3>
+                            <span class="badge" id="connectionBadge">IDLE</span>
+                        </div>
+                        <div class="card-body">
+                            <div class="connection-info" id="connectionInfo">
+                                <div class="empty-state">No active connection</div>
+                            </div>
+                        </div>
                     </div>
+
+                    <!-- Quick actions -->
+                    <div class="card actions-card">
+                        <div class="card-header">
+                            <h3>Quick Actions</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="actions-grid">
+                                <button class="action-btn" id="refreshBtn">
+                                    <span class="action-icon">↻</span>
+                                    <span>Refresh</span>
+                                </button>
+                                <button class="action-btn" id="testServersBtn">
+                                    <span class="action-icon">⚡</span>
+                                    <span>Test Servers</span>
+                                </button>
+                                <button class="action-btn" id="reloadConfigBtn">
+                                    <span class="action-icon">⟳</span>
+                                    <span>Reload Config</span>
+                                </button>
+                                <button class="action-btn" id="addSubBtn">
+                                    <span class="action-icon">+</span>
+                                    <span>Add Subscription</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Subscriptions page -->
+            <section class="page" id="page-subscriptions">
+                <div class="page-header">
+                    <h1>Subscriptions</h1>
+                    <div class="page-actions">
+                        <button class="btn-primary" id="addSubBtn2">+ Add Subscription</button>
+                    </div>
+                </div>
+
+                <div class="subscriptions-container">
                     <div class="subscriptions-list" id="subscriptionsList">
                         <div class="empty-state">No subscriptions</div>
                     </div>
-                </section>
+                </div>
+            </section>
 
-                <!-- Servers Panel -->
-                <section class="panel servers-panel">
-                    <div class="panel-header">
-                        <h2>SERVERS</h2>
-                        <div class="server-controls">
-                            <button class="btn-secondary" id="testServersBtn">TEST</button>
-                        </div>
+            <!-- Servers page -->
+            <section class="page" id="page-servers">
+                <div class="page-header">
+                    <h1>Servers</h1>
+                    <div class="page-actions">
+                        <button class="btn-secondary" id="testServersBtn2">Test All</button>
                     </div>
+                </div>
+
+                <div class="servers-container">
                     <div class="servers-list" id="serversList">
                         <div class="empty-state">No servers</div>
                     </div>
-                </section>
+                </div>
+            </section>
 
-                <!-- Logs Panel -->
-                <section class="panel logs-panel">
-                    <div class="panel-header">
-                        <h2>LOGS</h2>
-                        <button class="btn-icon" id="clearLogsBtn" title="Clear">✕</button>
+            <!-- Configuration page -->
+            <section class="page" id="page-config">
+                <div class="page-header">
+                    <h1>Configuration</h1>
+                    <div class="page-actions">
+                        <button class="btn-secondary" id="viewRawConfig">Raw JSON</button>
+                        <button class="btn-primary" id="saveConfigBtn">Save Changes</button>
                     </div>
-                    <div class="logs-container" id="logsContainer">
+                </div>
+
+                <div class="config-container">
+                    <div class="config-tabs">
+                        <button class="tab active" data-tab="config-preview">Preview</button>
+                        <button class="tab" data-tab="config-raw">Raw JSON</button>
+                        <button class="tab" data-tab="config-subscription">Subscription</button>
+                    </div>
+
+                    <div class="tab-content active" id="tab-config-preview">
+                        <div class="config-preview" id="configPreview">
+                            <div class="empty-state">No configuration loaded</div>
+                        </div>
+                    </div>
+
+                    <div class="tab-content" id="tab-config-raw">
+                        <pre class="code-block"><code id="configRaw">No configuration loaded</code></pre>
+                    </div>
+
+                    <div class="tab-content" id="tab-config-subscription">
+                        <div class="subscription-config" id="subscriptionConfig">
+                            <div class="empty-state">No active subscription</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Statistics page -->
+            <section class="page" id="page-statistics">
+                <div class="page-header">
+                    <h1>Statistics</h1>
+                    <div class="page-actions">
+                        <select class="select" id="timeRange">
+                            <option value="1h">1 Hour</option>
+                            <option value="6h">6 Hours</option>
+                            <option value="24h" selected>24 Hours</option>
+                            <option value="7d">7 Days</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="card stat-card">
+                        <div class="card-header">
+                            <h3>Traffic History</h3>
+                        </div>
+                        <div class="card-body">
+                            <canvas id="trafficChart" class="chart"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="card stat-card">
+                        <div class="card-header">
+                            <h3>Server Performance</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="server-stats" id="serverStats">
+                                <div class="empty-state">No data</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Logs page -->
+            <section class="page" id="page-logs">
+                <div class="page-header">
+                    <h1>Logs</h1>
+                    <div class="page-actions">
+                        <select class="select" id="logLevel">
+                            <option value="all">All</option>
+                            <option value="info">Info</option>
+                            <option value="warn">Warning</option>
+                            <option value="error">Error</option>
+                        </select>
+                        <button class="btn-secondary" id="clearLogsBtn">Clear</button>
+                    </div>
+                </div>
+
+                <div class="logs-container">
+                    <div class="logs-header">
+                        <span>Real-time logs</span>
+                        <span class="log-count" id="logCount">0 lines</span>
+                    </div>
+                    <div class="logs-content" id="logsContent">
                         <div class="empty-state">No logs</div>
                     </div>
-                </section>
-            </div>
+                </div>
+            </section>
         </main>
+    </div>
 
-        <!-- Settings Modal -->
-        <div class="modal" id="settingsModal">
-            <div class="modal-backdrop" id="modalBackdrop"></div>
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h2>API SETTINGS</h2>
-                    <button class="btn-icon" id="closeSettingsBtn">✕</button>
+    <!-- Settings modal -->
+    <div class="modal" id="settingsModal">
+        <div class="modal-backdrop" id="modalBackdrop"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>API Settings</h2>
+                <button class="btn-icon" id="closeSettingsBtn">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="apiUrl">API URL</label>
+                    <input type="text" id="apiUrl" placeholder="http://172.16.1.100:9090">
                 </div>
-                <div class="modal-body">
-                    <div class="form-group">
-                        <label for="apiUrl">API URL</label>
-                        <input type="text" id="apiUrl" placeholder="http://172.16.1.100:9090" value="">
-                    </div>
-                    <div class="form-group">
-                        <label for="apiToken">Auth Token</label>
-                        <input type="password" id="apiToken" placeholder="Bearer token" value="">
-                    </div>
-                    <div class="form-group">
-                        <label for="refreshRate">Refresh Rate (ms)</label>
-                        <input type="number" id="refreshRate" value="3000" min="1000" max="30000" step="1000">
-                    </div>
+                <div class="form-group">
+                    <label for="apiToken">Auth Token</label>
+                    <input type="password" id="apiToken" placeholder="Bearer token">
                 </div>
-                <div class="modal-footer">
-                    <button class="btn-secondary" id="cancelSettingsBtn">CANCEL</button>
-                    <button class="btn-primary" id="saveSettingsBtn">SAVE</button>
+                <div class="form-group">
+                    <label for="refreshRate">Refresh Rate (ms)</label>
+                    <input type="range" id="refreshRate" min="1000" max="30000" step="1000" value="3000">
+                    <span class="range-value" id="refreshRateValue">3000ms</span>
                 </div>
             </div>
-        </div>
-
-        <!-- Add Subscription Modal -->
-        <div class="modal" id="addSubModal">
-            <div class="modal-backdrop" id="addSubBackdrop"></div>
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h2>ADD SUBSCRIPTION</h2>
-                    <button class="btn-icon" id="closeAddSubBtn">✕</button>
-                </div>
-                <div class="modal-body">
-                    <div class="form-group">
-                        <label for="subName">Name</label>
-                        <input type="text" id="subName" placeholder="My Subscription">
-                    </div>
-                    <div class="form-group">
-                        <label for="subUrl">URL</label>
-                        <input type="text" id="subUrl" placeholder="https://sub.example.com/api/sub/...">
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button class="btn-secondary" id="cancelAddSubBtn">CANCEL</button>
-                    <button class="btn-primary" id="saveAddSubBtn">ADD</button>
-                </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" id="cancelSettingsBtn">Cancel</button>
+                <button class="btn-primary" id="saveSettingsBtn">Save</button>
             </div>
         </div>
     </div>
 
+    <!-- Add subscription modal -->
+    <div class="modal" id="addSubModal">
+        <div class="modal-backdrop" id="addSubBackdrop"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Add Subscription</h2>
+                <button class="btn-icon" id="closeAddSubBtn">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="subName">Name</label>
+                    <input type="text" id="subName" placeholder="My Subscription">
+                </div>
+                <div class="form-group">
+                    <label for="subUrl">URL</label>
+                    <input type="text" id="subUrl" placeholder="https://sub.example.com/api/sub/...">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" id="cancelAddSubBtn">Cancel</button>
+                <button class="btn-primary" id="saveAddSubBtn">Add</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/background.js"></script>
     <script src="/js/api.js"></script>
     <script src="/js/app.js"></script>
 </body>

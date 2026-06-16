@@ -1,15 +1,9 @@
-// Sing-Box API Client
-
+// API Client
 class APIClient {
-    constructor(baseUrl, token = '') {
-        this.baseUrl = baseUrl || '';
-        this.token = token;
-        this.connected = false;
-    }
-
-    setConfig(baseUrl, token) {
+    constructor(baseUrl = '', token = '') {
         this.baseUrl = baseUrl;
         this.token = token;
+        this.connected = false;
     }
 
     async request(endpoint, options = {}) {
@@ -24,13 +18,10 @@ class APIClient {
         }
 
         try {
-            const response = await fetch(url, {
-                ...options,
-                headers,
-            });
-
+            const response = await fetch(url, { ...options, headers });
+            
             if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                throw new Error(`HTTP ${response.status}`);
             }
 
             const data = await response.json();
@@ -42,27 +33,22 @@ class APIClient {
         }
     }
 
-    // Health check
     async health() {
         return this.request('/api/health');
     }
 
-    // Status
     async status() {
         return this.request('/api/status');
     }
 
-    // Traffic stats
     async stats() {
         return this.request('/api/stats');
     }
 
-    // Connections
     async connections() {
         return this.request('/api/connections');
     }
 
-    // Subscriptions
     async getSubscriptions() {
         return this.request('/api/subscriptions');
     }
@@ -87,7 +73,6 @@ class APIClient {
         });
     }
 
-    // Servers
     async getServers() {
         return this.request('/api/servers');
     }
@@ -106,7 +91,6 @@ class APIClient {
         });
     }
 
-    // Config
     async getConfig() {
         return this.request('/api/config');
     }
@@ -117,11 +101,9 @@ class APIClient {
         });
     }
 
-    // Logs
     async getLogs() {
         return this.request('/api/logs');
     }
 }
 
-// Export singleton
 const api = new APIClient();

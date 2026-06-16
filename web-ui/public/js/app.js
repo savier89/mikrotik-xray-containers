@@ -1,15 +1,16 @@
-// Sing-Box Manager - Main Application
-
+// Main Application
 class App {
     constructor() {
         this.refreshRate = 3000;
         this.refreshTimer = null;
+        this.currentPage = 'dashboard';
         this.state = {
             status: null,
             stats: null,
             connections: null,
             subscriptions: [],
             servers: [],
+            config: null,
             logs: '',
         };
 
@@ -22,12 +23,14 @@ class App {
         const settings = localStorage.getItem('singbox_settings');
         if (settings) {
             const { apiUrl, apiToken, refreshRate } = JSON.parse(settings);
-            api.setConfig(apiUrl, apiToken);
+            api.baseUrl = apiUrl;
+            api.token = apiToken;
             this.refreshRate = refreshRate || 3000;
             
             document.getElementById('apiUrl').value = apiUrl;
             document.getElementById('apiToken').value = apiToken;
             document.getElementById('refreshRate').value = this.refreshRate;
+            document.getElementById('refreshRateValue').textContent = `${this.refreshRate}ms`;
         }
     }
 
@@ -36,7 +39,8 @@ class App {
         const apiToken = document.getElementById('apiToken').value;
         const refreshRate = parseInt(document.getElementById('refreshRate').value) || 3000;
 
-        api.setConfig(apiUrl, apiToken);
+        api.baseUrl = apiUrl;
+        api.token = apiToken;
         this.refreshRate = refreshRate;
 
         localStorage.setItem('singbox_settings', JSON.stringify({
@@ -50,6 +54,15 @@ class App {
     }
 
     bindEvents() {
+        // Navigation
+        document.querySelectorAll('.nav-item').forEach(item => {
+            item.addEventListener('click', (e) => {
+                e.preventDefault();
+                const page = item.dataset.page;
+                this.switchPage(page);
+            });
+        });
+
         // Settings modal
         document.getElementById('settingsBtn').addEventListener('click', () => {
             document.getElementById('settingsModal').classList.add('active');
@@ -72,8 +85,17 @@ class App {
             document.getElementById('settingsModal').classList.remove('active');
         });
 
+        // Refresh rate slider
+        document.getElementById('refreshRate').addEventListener('input', (e) => {
+            document.getElementById('refreshRateValue').textContent = `${e.target.value}ms`;
+        });
+
         // Add subscription modal
         document.getElementById('addSubBtn').addEventListener('click', () => {
+            document.getElementById('addSubModal').classList.add('active');
+        });
+
+        document.getElementById('addSubBtn2').addEventListener('click', () => {
             document.getElementById('addSubModal').classList.add('active');
         });
 
@@ -93,15 +115,59 @@ class App {
             this.addSubscription();
         });
 
-        // Test servers
+        // Quick actions
+        document.getElementById('refreshBtn').addEventListener('click', () => {
+            this.fetchData();
+        });
+
         document.getElementById('testServersBtn').addEventListener('click', () => {
             this.testServers();
+        });
+
+        document.getElementById('testServersBtn2').addEventListener('click', () => {
+            this.testServers();
+        });
+
+        document.getElementById('reloadConfigBtn').addEventListener('click', () => {
+            this.reloadConfig();
+        });
+
+        // Config tabs
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                const tabId = tab.dataset.tab;
+                this.switchTab(tabId);
+            });
         });
 
         // Clear logs
         document.getElementById('clearLogsBtn').addEventListener('click', () => {
             this.state.logs = '';
             this.renderLogs();
+        });
+    }
+
+    switchPage(page) {
+        this.currentPage = page;
+        
+        // Update nav
+        document.querySelectorAll('.nav-item').forEach(item => {
+            item.classList.toggle('active', item.dataset.page === page);
+        });
+        
+        // Update pages
+        document.querySelectorAll('.page').forEach(p => {
+            p.classList.toggle('active', p.id === `page-${page}`);
+        });
+    }
+
+    switchTab(tabId) {
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.classList.toggle('active', tab.dataset.tab === tabId);
+        });
+        
+        document.querySelectorAll('.tab-content').forEach(content => {
+            content.classList.toggle('active', content.id === `tab-${tabId}`);
         });
     }
 
@@ -127,40 +193,31 @@ class App {
 
     async testServers() {
         try {
-            const btn = document.getElementById('testServersBtn');
-            btn.disabled = true;
-            btn.textContent = 'TESTING...';
-            
-            const result = await api.testServers(5);
+            await api.testServers(5);
             await this.fetchData();
-            
-            btn.disabled = false;
-            btn.textContent = 'TEST';
         } catch (error) {
             alert('Failed to test servers: ' + error.message);
-            const btn = document.getElementById('testServersBtn');
-            btn.disabled = false;
-            btn.textContent = 'TEST';
+        }
+    }
+
+    async reloadConfig() {
+        try {
+            await api.reloadConfig();
+            await this.fetchData();
+        } catch (error) {
+            alert('Failed to reload config: ' + error.message);
         }
     }
 
     async fetchData() {
         try {
-            // Status
             this.state.status = await api.status();
-            this.updateConnectionStatus(true);
-            
-            // Stats
             this.state.stats = await api.stats();
-            
-            // Connections
             this.state.connections = await api.connections();
             
-            // Subscriptions
             const subs = await api.getSubscriptions();
             this.state.subscriptions = subs.subscriptions || [];
             
-            // Servers
             if (this.state.subscriptions.length > 0) {
                 try {
                     const servers = await api.getServers();
@@ -170,7 +227,12 @@ class App {
                 }
             }
             
-            // Logs
+            try {
+                this.state.config = await api.getConfig();
+            } catch (e) {
+                this.state.config = null;
+            }
+            
             try {
                 const logs = await api.getLogs();
                 this.state.logs = logs.logs || '';
@@ -178,6 +240,7 @@ class App {
                 // Ignore log errors
             }
             
+            this.updateConnectionStatus(true);
             this.render();
         } catch (error) {
             this.updateConnectionStatus(false);
@@ -200,58 +263,28 @@ class App {
     }
 
     render() {
-        this.renderStatus();
-        this.renderTraffic();
-        this.renderConnections();
+        this.renderDashboard();
         this.renderSubscriptions();
         this.renderServers();
+        this.renderConfig();
         this.renderLogs();
     }
 
-    renderStatus() {
+    renderDashboard() {
         if (!this.state.status) return;
         
         const status = this.state.status;
         document.getElementById('singboxStatus').textContent = status.running ? 'ONLINE' : 'OFFLINE';
-        document.getElementById('singboxStatus').className = `panel-badge ${status.running ? 'online' : 'offline'}`;
+        document.getElementById('singboxStatus').className = `badge ${status.running ? 'online' : 'offline'}`;
         document.getElementById('uptime').textContent = this.formatUptime(status.uptime);
         document.getElementById('pid').textContent = status.pid || '--';
         document.getElementById('subsCount').textContent = this.state.subscriptions.length;
         document.getElementById('serversCount').textContent = this.state.servers.length;
-    }
 
-    renderTraffic() {
-        if (!this.state.stats) return;
-        
-        const stats = this.state.stats;
-        document.getElementById('upload').textContent = this.formatBytes(stats.upload || 0);
-        document.getElementById('download').textContent = this.formatBytes(stats.download || 0);
-    }
-
-    renderConnections() {
-        const list = document.getElementById('connectionsList');
-        const count = document.getElementById('connectionsCount');
-        
-        if (!this.state.connections || !this.state.connections.connections) {
-            list.innerHTML = '<div class="empty-state">No connection data</div>';
-            count.textContent = '0';
-            return;
+        if (this.state.stats) {
+            document.getElementById('upload').textContent = this.formatBytes(this.state.stats.upload || 0);
+            document.getElementById('download').textContent = this.formatBytes(this.state.stats.download || 0);
         }
-        
-        const conns = this.state.connections.connections;
-        count.textContent = conns.length;
-        
-        if (conns.length === 0) {
-            list.innerHTML = '<div class="empty-state">No active connections</div>';
-            return;
-        }
-        
-        list.innerHTML = conns.slice(0, 20).map(conn => `
-            <div class="conn-item">
-                <span class="conn-rule">${conn.rule || 'default'}</span>
-                ${conn.host || conn.process || 'unknown'}
-            </div>
-        `).join('');
     }
 
     renderSubscriptions() {
@@ -308,16 +341,53 @@ class App {
         }).join('');
     }
 
+    renderConfig() {
+        if (!this.state.config) return;
+        
+        const config = this.state.config;
+        
+        // Preview
+        document.getElementById('configPreview').innerHTML = `
+            <div class="config-section">
+                <h4>Inbounds</h4>
+                <pre>${JSON.stringify(config.inbounds, null, 2)}</pre>
+            </div>
+            <div class="config-section">
+                <h4>Outbounds</h4>
+                <pre>${JSON.stringify(config.outbounds, null, 2)}</pre>
+            </div>
+        `;
+        
+        // Raw JSON
+        document.getElementById('configRaw').textContent = JSON.stringify(config, null, 2);
+        
+        // Subscription
+        if (this.state.subscriptions.length > 0) {
+            const activeSub = this.state.subscriptions.find(s => s.id === this.state.status?.active_subscription);
+            document.getElementById('subscriptionConfig').innerHTML = `
+                <div class="sub-config">
+                    <h4>${activeSub?.name || 'Active Subscription'}</h4>
+                    <p>${activeSub?.url || ''}</p>
+                    <p>${this.state.servers.length} servers</p>
+                </div>
+            `;
+        }
+    }
+
     renderLogs() {
-        const container = document.getElementById('logsContainer');
+        const container = document.getElementById('logsContent');
+        const count = document.getElementById('logCount');
         
         if (!this.state.logs) {
             container.innerHTML = '<div class="empty-state">No logs</div>';
+            count.textContent = '0 lines';
             return;
         }
         
         const lines = this.state.logs.split('\n').filter(l => l.trim());
-        container.innerHTML = lines.slice(-50).map(line => {
+        count.textContent = `${lines.length} lines`;
+        
+        container.innerHTML = lines.slice(-100).map(line => {
             const match = line.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})/);
             const time = match ? match[1] : '';
             const message = time ? line.replace(time, '') : line;
