@@ -32,6 +32,8 @@ set -e
 
 # ===== API support =====
 : "${API_PORT:=9090}"
+: "${API_HOST:=0.0.0.0}"
+: "${API_AUTH_TOKEN:=}"
 : "${SINGBOX_API_PORT:=20123}"
 : "${SINGBOX_API_TOKEN:=}"
 
@@ -396,9 +398,11 @@ echo "sing-box started (PID: $SINGBOX_PID)"
 # Start management API
 export SINGBOX_API_ADDR="127.0.0.1:${SINGBOX_API_PORT}"
 export SINGBOX_API_TOKEN="${SINGBOX_API_TOKEN}"
+export API_AUTH_TOKEN="${API_AUTH_TOKEN}"
+export API_HOST="${API_HOST}"
 python3 /api_server.py &
 API_PID=$!
-echo "Management API started (PID: $API_PID, port: ${API_PORT})"
+echo "Management API started (PID: $API_PID, port: ${API_HOST}:${API_PORT})"
 
 # Wait for either process to exit
 wait -n $SINGBOX_PID $API_PID

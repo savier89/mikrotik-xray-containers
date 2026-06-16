@@ -37,8 +37,10 @@ from datetime import datetime
 
 # Configuration
 API_PORT = int(os.environ.get('API_PORT', '9090'))
+API_HOST = os.environ.get('API_HOST', '0.0.0.0')
 SINGBOX_API_ADDR = os.environ.get('SINGBOX_API_ADDR', '127.0.0.1:20123')
 SINGBOX_API_TOKEN = os.environ.get('SINGBOX_API_TOKEN', '')
+API_AUTH_TOKEN = os.environ.get('API_AUTH_TOKEN', '')  # Optional Bearer token for API auth
 SUB_DIR = '/etc/sing-box/subscriptions'
 CONFIG_FILE = '/sing-box.json'
 LOG_FILE = '/tmp/sing-box.log'
@@ -163,6 +165,23 @@ class APIHandler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         """Suppress default logging."""
         pass
+    
+    def check_auth(self):
+        """Check Bearer token authentication."""
+        if not API_AUTH_TOKEN:
+            return True  # No auth required
+        auth = self.headers.get('Authorization', '')
+        if auth.startswith('Bearer '):
+            token = auth[7:]
+            return token == API_AUTH_TOKEN
+        return False
+    
+    def require_auth(self):
+        """Require authentication, return True if authorized."""
+        if self.check_auth():
+            return True
+        self.send_json({'error': 'Unauthorized'}, 401)
+        return False
 
     def send_json(self, data, status=200):
         self.send_response(status)
@@ -236,6 +255,8 @@ class APIHandler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         global selected_server, active_subscription
+        if not self.require_auth():
+            return
         path = self.path.rstrip('/')
         body = self.read_body()
 
@@ -331,6 +352,8 @@ class APIHandler(BaseHTTPRequestHandler):
 
     def do_DELETE(self):
         global active_subscription
+        if not self.require_auth():
+            return
         path = self.path.rstrip('/')
 
         if path.startswith('/api/subscriptions/'):
@@ -348,8 +371,10 @@ def main():
     start_time = time.time()
     load_subscriptions()
 
-    server = HTTPServer(('0.0.0.0', API_PORT), APIHandler)
-    print(f'Management API started on port {API_PORT}')
+    server = HTTPServer((API_HOST, API_PORT), APIHandler)
+    print(f'Management API started on {API_HOST}:{API_PORT}')
+    if API_AUTH_TOKEN:
+        print(f'Auth enabled: use Bearer token')
     print(f'Endpoints:')
     print(f'  GET  /api/health')
     print(f'  GET  /api/status')
