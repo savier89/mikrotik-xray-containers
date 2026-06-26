@@ -126,7 +126,6 @@ fi
 
 for arch in ${ARCH_MAP}; do
     build_singbox "${arch}"
-    build_webui "${arch}"
 done
 
 echo "========================================"
@@ -136,11 +135,6 @@ echo ""
 echo "Images in ${REGISTRY}:"
 echo "  ${PROJECT}/sing-box:${TAG}-amd64"
 echo "  ${PROJECT}/sing-box:${TAG}-arm64"
-echo "  ${PROJECT}/sing-box:${TAG}-arm"
-echo "  ${PROJECT}/web-ui:${TAG}-amd64"
-echo "  ${PROJECT}/web-ui:${TAG}-arm64"
-echo "  ${PROJECT}/web-ui:${TAG}-arm"
 echo ""
 echo "On MikroTik, pull with:"
 echo "  /container remote-image=${REGISTRY}/${PROJECT}/sing-box:${TAG}-arm64"
-echo "  /container remote-image=${REGISTRY}/${PROJECT}/web-ui:${TAG}-arm64"

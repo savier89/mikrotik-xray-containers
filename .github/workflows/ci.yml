@@ -60,5 +60,3 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build sing-box image
         run: docker build -f sing-box/Dockerfile -t mikrotik-sing-box:test .
-      - name: Build web-ui image
-        run: docker build -f web-ui/Dockerfile -t mikrotik-web-ui:test web-ui
