@@ -497,7 +497,12 @@ func parseServerConfig(rawURL string) map[string]interface{} {
 		if cfg.Transport == "xhttp" {
 			config["mode"] = cfg.Mode
 			if cfg.Extra != "" {
-				config["extra"] = cfg.Extra
+				var extraObj interface{}
+				if err := json.Unmarshal([]byte(cfg.Extra), &extraObj); err == nil {
+					config["extra"] = extraObj
+				} else {
+					config["extra"] = cfg.Extra
+				}
 			}
 		}
 		if cfg.Fingerprint != "" {
