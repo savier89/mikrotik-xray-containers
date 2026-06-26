@@ -96,17 +96,14 @@ add address=172.17.0.1/24 interface=docker
 ```routeros
 /container envs
 
-# sing-box контейнер
-add key=REMOTE_ADDRESS name=singbox value=your-vless-server.com
-add key=REMOTE_PORT name=singbox value=443
-add key=ID name=singbox value=YOUR-UUID-HERE
-add key=SERVER_NAME name=singbox value=google.com
-add key=NETWORK name=singbox value=tcp
-add key=LOG_LEVEL name=singbox value=warn
+# Только базовые настройки — всё остальное через Web UI
 add key=API_PORT name=singbox value=9090
 add key=API_HOST name=singbox value=0.0.0.0
+add key=API_AUTH_TOKEN name=singbox value=your-secret
 add key=SINGBOX_API_PORT name=singbox value=20123
 add key=WEBUI_PORT name=singbox value=11501
+add key=LOG_LEVEL name=singbox value=warn
+add key=DNS_UPSTREAM name=singbox value=8.8.8.8
 add key=TZ name=singbox value=Europe/Moscow
 ```
 
@@ -150,44 +147,37 @@ add chain=input in-interface=veth1 protocol=tcp dst-port=53 action=accept \
 
 ## Переменные окружения
 
-| Переменная | Описание | Пример |
+| Переменная | Описание | Значение по умолчанию |
 |---|---|---|
-| `REMOTE_ADDRESS` | Хост VPN сервера | `mydomain.com` |
-| `REMOTE_PORT` | Порт сервера | `443` |
-| `ID` | UUID клиента (VLESS) / пароль | `YOUR-UUID-HERE` |
-| `SERVER_NAME` | SNI | `google.com` |
-| `FLOW` | Flow (xtls-reality) | `xtls-rprx-vision` |
-| `NETWORK` | Транспорт | `tcp`, `ws`, `grpc`, `xhttp` |
-| `WS_PATH` | WebSocket/xHTTP path | `/websocket` |
-| `PUBLIC_KEY` | PublicKey (Reality) | `7JTFIDt3...` |
-| `SHORT_ID` | ShortId (Reality) | `aeb4c72f...` |
-| `DNS_UPSTREAM` | DNS серверы (через запятую) | `8.8.8.8,8.8.4.4` |
-| `DNS_TYPE` | Тип DNS | `udp`, `doh` |
-| `TUN_STACK` | Stack TUN | `system`, `gvisor` |
-| `TUN_MTU` | MTU TUN | `1500` |
-| `LOG_LEVEL` | Уровень логов sing-box | `warn` |
 | `API_PORT` | Порт API сервера | `9090` |
 | `API_HOST` | Хост API сервера | `0.0.0.0` |
-| `API_AUTH_TOKEN` | Токен авторизации API | `your-secret` |
+| `API_AUTH_TOKEN` | Токен авторизации API | `""` |
 | `SINGBOX_API_PORT` | Порт clash_api sing-box | `20123` |
-| `SINGBOX_API_TOKEN` | Токен clash_api | `token` |
+| `SINGBOX_API_TOKEN` | Токен clash_api | `""` |
 | `WEBUI_PORT` | Порт Web UI | `11501` |
-| `SUB_URL` | URL подписки | `https://sub.example.com/api/...` |
-| `SUB_SELECT` | Выбор сервера | `auto`, `index:1`, `random`, `fastest` |
-| `DIRECT_IPS` | IP для прямого доступа (через запятую) | `10.0.0.0/8,172.16.0.0/12` |
-| `DOMAINS` | Домены для прямого доступа | `example.com,internal.local` |
+| `LOG_LEVEL` | Уровень логов sing-box | `warn` |
+| `DNS_UPSTREAM` | DNS сервер | `8.8.8.8` |
+| `TUN_STACK` | Stack TUN | `system` |
+| `TUN_MTU` | MTU TUN | `1500` |
+| `TZ` | Часовой пояс | `UTC` |
 
-## Подписки
+## Web UI
 
-Контейнер поддерживает подписки с автоматическим обновлением. Укажите `SUB_URL` в переменных окружения.
+Остальная конфигурация — через веб-интерфейс (порт 11501 по умолчанию).
 
-**Формат подписки:** список ссылок (VLESS, VMess, Trojan, Hysteria2, Shadowsocks), необязательно в base64.
+**Подписки и серверы:**
+- Добавьте подписку по URL или вручную введите ссылки на серверы
+- Поддерживаемые протоколы: VLESS, VMess, Trojan, Hysteria2, Shadowsocks
+- Поддерживаемые транспортные протоколы: TCP, WebSocket, gRPC, xHTTP, HTTP-Upgrade
+- Тестирование серверов (задержка)
+- Выбор сервера — через Web UI
 
-**Выбор сервера (`SUB_SELECT`):**
-- `auto` / `first` — первый сервер из списка
-- `index:N` — сервер по индексу (начиная с 1)
-- `random` — случайный сервер
-- `fastest` — сервер с минимальной задержкой
+**Управление:**
+- Подключение / отключение sing-box
+- Мониторинг трафика (upload/download)
+- Активные подключения
+- Логи sing-box
+- Просмотр и редактирование конфига
 
 ## API Server
 
