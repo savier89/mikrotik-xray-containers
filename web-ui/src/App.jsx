@@ -653,9 +653,9 @@ const Servers = ({ data, loading, error, onSelect, onTest, onConnect, onTestConf
             >
               <div className="server-item-inner">
                 <div className="server-info">
-                  <span className="server-name">Server #{idx}</span>
+                  <span className="server-name">{server.name || `Server #${idx}`}</span>
                   <span className="server-meta">
-                    {server.split('://')[0] || 'proxy'}
+                    {server.url ? server.url.split('://')[0] : 'proxy'}
                   </span>
                   {testResults[idx]?.latency != null && (
                     <span className="server-latency">

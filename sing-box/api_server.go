@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -33,15 +34,21 @@ type Config struct {
 	PIDFile       string
 }
 
+// ServerInfo holds a server URL with its remark (name)
+type ServerInfo struct {
+	Name string `json:"name"`
+	URL  string `json:"url"`
+}
+
 // Subscription represents a subscription profile.
 type Subscription struct {
-	ID         string   `json:"id"`
-	Name       string   `json:"name"`
-	URL        string   `json:"url"`
-	Servers    []string `json:"servers"`
-	Created    string   `json:"created"`
-	Updated    string   `json:"updated"`
-	ServerCount int     `json:"server_count"`
+	ID          string      `json:"id"`
+	Name        string      `json:"name"`
+	URL         string      `json:"url"`
+	Servers     []ServerInfo `json:"servers"`
+	Created     string      `json:"created"`
+	Updated     string      `json:"updated"`
+	ServerCount int         `json:"server_count"`
 }
 
 // State holds the application state.
@@ -206,9 +213,25 @@ func fetchSubscription(url string) (string, error) {
 	return content, nil
 }
 
-func parseServers(content string) []string {
+func parseServerInfos(content string) []ServerInfo {
 	re := regexp.MustCompile(`(?:hysteria2|vless|vmess|trojan|ss)://[^\s"<,]+`)
-	return re.FindAllString(content, -1)
+	rawURLs := re.FindAllString(content, -1)
+	result := make([]ServerInfo, 0, len(rawURLs))
+	for _, raw := range rawURLs {
+		name := ""
+		hashIdx := strings.Index(raw, "#")
+		if hashIdx >= 0 {
+			name = raw[hashIdx+1:]
+			if decoded, err := url.PathUnescape(name); err == nil {
+				name = decoded
+			}
+		}
+		if name == "" {
+			name = fmt.Sprintf("Server #%d", len(result))
+		}
+		result = append(result, ServerInfo{Name: name, URL: raw})
+	}
+	return result
 }
 
 // isDirectServerURL checks if the URL is a direct server link (not a subscription URL)
@@ -222,69 +245,42 @@ func isDirectServerURL(url string) bool {
 }
 
 func testServerLatency(serverURL string, timeout int) *int {
-	server, port, uuid, sni, transport, path, host, mode, err := parseVlessURL(serverURL)
+	cfg, err := parseServerURL(serverURL)
 	if err != nil {
 		return nil
 	}
-
-	// Create temporary sing-box config for testing
-	testConfig := map[string]interface{}{
-		"log": map[string]interface{}{
-			"level": "warn",
-		},
-		"dns": map[string]interface{}{
-			"servers": []map[string]interface{}{
-				{"tag": "dns", "server": "8.8.8.8", "type": "udp"},
-			},
-			"final": "dns",
-		},
-		"inbounds": []map[string]interface{}{
-			{"type": "direct", "tag": "direct-in"},
-		},
-		"outbounds": []map[string]interface{}{
-			{
-				"tag":      "test",
-				"type":     "vless",
-				"server":   server,
-				"server_port": port,
-				"uuid":     uuid,
-				"tls": map[string]interface{}{
-					"enabled":      true,
-					"server_name":  sni,
-					"utls":         map[string]interface{}{"enabled": true, "fingerprint": "chrome"},
-				},
-				"packet_encoding": "xudp",
-			},
-		},
-	}
-
-	// Add transport config if xhttp
-	if transport == "xhttp" {
-		if outbounds, ok := testConfig["outbounds"].([]map[string]interface{}); ok && len(outbounds) > 0 {
-			outbounds[0]["transport"] = map[string]interface{}{
-				"type":           "xhttp",
-				"host":           host,
-				"path":           path,
-				"mode":           mode,
-				"x_padding_bytes": "100-500",
-			}
-		}
-	}
-
-	configJSON, _ := json.Marshal(testConfig)
-	tmpFile := fmt.Sprintf("/tmp/test_%d.json", time.Now().UnixNano())
-	os.WriteFile(tmpFile, configJSON, 0644)
-	defer os.Remove(tmpFile)
 
 	start := time.Now()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeout)*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "/sing-box", "check", "-c", tmpFile, "--disable-color")
-	err = cmd.Run()
-	latency := int(time.Since(start).Milliseconds())
+
+	// TCP dial
+	dialer := net.Dialer{Timeout: time.Duration(timeout) * time.Second}
+	addr := fmt.Sprintf("%s:%d", cfg.Server, cfg.Port)
+	conn, err := dialer.DialContext(ctx, "tcp", addr)
 	if err != nil {
+		log.Printf("test latency %s: TCP dial failed: %v", addr, err)
 		return nil
 	}
+	defer conn.Close()
+
+	// TLS handshake if security=tls
+	if cfg.Security == "tls" || cfg.Protocol == "trojan" || cfg.Protocol == "vless" {
+		tlsConn := net.Conn(conn)
+		// For TLS, we do a basic handshake
+		tlsConfig := &tls.Config{
+			ServerName:         cfg.SNI,
+			InsecureSkipVerify: cfg.Insecure,
+		}
+		tlsConn = tls.Client(conn, tlsConfig)
+		if err := tlsConn.(*tls.Conn).Handshake(); err != nil {
+			log.Printf("test latency %s: TLS handshake failed: %v", addr, err)
+			return nil
+		}
+		conn = tlsConn
+	}
+
+	latency := int(time.Since(start).Milliseconds())
 	return &latency
 }
 
@@ -785,38 +781,49 @@ func handleSubscriptions(w http.ResponseWriter, r *http.Request) {
 		}
 		body := readBody(r)
 		name, _ := body["name"].(string)
-		url, _ := body["url"].(string)
+		subURL, _ := body["url"].(string)
 		if name == "" {
 			name = "Subscription"
 		}
-		if url == "" {
+		if subURL == "" {
 			sendJSON(w, 400, map[string]interface{}{"error": "URL required"})
 			return
 		}
-		var servers []string
-		if url == "manual" {
+		var servers []ServerInfo
+		if subURL == "manual" {
 			if srvs, ok := body["servers"].([]interface{}); ok {
-				for _, s := range srvs {
+				for idx, s := range srvs {
 					if srv, ok := s.(string); ok {
-						servers = append(servers, srv)
+						servers = append(servers, ServerInfo{Name: fmt.Sprintf("Server #%d", idx), URL: srv})
 					}
 				}
 			}
-		} else if isDirectServerURL(url) {
+		} else if isDirectServerURL(subURL) {
 			// Direct server URL (vless://, trojan://, etc.)
-			servers = []string{url}
+			name := ""
+			hashIdx := strings.Index(subURL, "#")
+			if hashIdx >= 0 {
+				name = subURL[hashIdx+1:]
+				if decoded, err := url.PathUnescape(name); err == nil {
+					name = decoded
+				}
+			}
+			if name == "" {
+				name = "Direct Server"
+			}
+			servers = []ServerInfo{{Name: name, URL: subURL}}
 		} else {
-			content, err := fetchSubscription(url)
+			content, err := fetchSubscription(subURL)
 			if err != nil {
 				sendJSON(w, 500, map[string]interface{}{"error": "Failed to fetch subscription"})
 				return
 			}
-			servers = parseServers(content)
+			servers = parseServerInfos(content)
 		}
 		sub := Subscription{
 			ID:          fmt.Sprintf("sub_%d", time.Now().Unix()),
 			Name:        name,
-			URL:         url,
+			URL:         subURL,
 			Servers:     servers,
 			Created:     time.Now().Format(time.RFC3339),
 			Updated:     time.Now().Format(time.RFC3339),
@@ -952,7 +959,7 @@ func handleServerSelect(w http.ResponseWriter, body map[string]interface{}) {
 	state.selectedServer = index
 
 	// Update sing-box config with the selected server
-	serverURL := sub.Servers[index]
+	serverURL := sub.Servers[index].URL
 	if err := updateSingboxOutbound(serverURL); err != nil {
 		log.Printf("Warning: failed to update sing-box outbound: %v", err)
 	}
@@ -997,7 +1004,7 @@ func handleServerTest(w http.ResponseWriter, body map[string]interface{}) {
 	}
 	results := []map[string]interface{}{}
 	for i, server := range sub.Servers {
-		latency := testServerLatency(server, timeout)
+		latency := testServerLatency(server.URL, timeout)
 		result := map[string]interface{}{
 			"index":  i,
 			"server": server,
@@ -1075,7 +1082,7 @@ func handleServerTestConfig(w http.ResponseWriter, body map[string]interface{}) 
 	}
 
 	// Create test config with the selected server
-	serverURL := sub.Servers[index]
+	serverURL := sub.Servers[index].URL
 	server, port, uuid, sni, transport, path, host, mode, err := parseVlessURL(serverURL)
 	if err != nil {
 		sendJSON(w, 400, map[string]interface{}{"error": err.Error()})
