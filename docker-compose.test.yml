@@ -1,0 +1,26 @@
+services:
+  sing-box:
+    build:
+      context: .
+      dockerfile: sing-box/Dockerfile
+    image: test-sing-box-with-webui:latest
+    container_name: test-sing-box
+    environment:
+      REMOTE_ADDRESS: "placeholder"
+      REMOTE_PORT: "443"
+      ID: "00000000-0000-0000-0000-000000000000"
+      SERVER_NAME: "placeholder"
+      NETWORK: "tcp"
+      LOG_LEVEL: "warn"
+      API_PORT: "9090"
+      API_HOST: "0.0.0.0"
+      SINGBOX_API_PORT: "20123"
+      WEBUI_PORT: "11501"
+    ports:
+      - "9090:9090"
+      - "11501:11501"
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - "/dev/net/tun:/dev/net/tun"
+    restart: "no"

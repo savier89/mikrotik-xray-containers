@@ -348,12 +348,6 @@ jq -n \
         strict_route: true,
         stack: $tun_stack,
         route_exclude_address: ["192.168.0.0/16", "172.16.0.0/12", "10.0.0.0/8", "fc00::/7"]
-      },
-      {
-        type: "mixed",
-        tag: "clash-api",
-        listen: $clash_api_addr,
-        listen_port: ($clash_api_port | tonumber)
       }
     ],
     outbounds: [$outbound, {tag: "direct", type: "direct"}, {tag: "block", type: "block"}],
@@ -378,7 +372,7 @@ cat /sing-box.json
 echo ""
 
 echo "Validating..."
-sing-box check -c /sing-box.json --disable-color || exit 1
+/sing-box check -c /sing-box.json --disable-color || exit 1
 echo "OK."
 
 # If running tests, execute the command instead of starting sing-box
@@ -389,7 +383,7 @@ fi
 echo "Starting sing-box..."
 
 # Start sing-box in background
-/usr/local/bin/sing-box run -c /sing-box.json > /tmp/sing-box.log 2>&1 &
+/sing-box run -c /sing-box.json > /tmp/sing-box.log 2>&1 &
 SINGBOX_PID=$!
 echo "$SINGBOX_PID" > /tmp/.singbox_pid
 
@@ -400,18 +394,72 @@ export SINGBOX_API_ADDR="127.0.0.1:${SINGBOX_API_PORT}"
 export SINGBOX_API_TOKEN="${SINGBOX_API_TOKEN}"
 export API_AUTH_TOKEN="${API_AUTH_TOKEN}"
 export API_HOST="${API_HOST}"
-/usr/local/bin/api_server &
+/api_server &
 API_PID=$!
 echo "Management API started (PID: $API_PID, port: ${API_HOST}:${API_PORT})"
 
+# Start web UI server
+WEBUI_PORT="${WEBUI_PORT:-11501}"
+export API_TARGET="http://127.0.0.1:${API_PORT}"
+export PORT="$WEBUI_PORT"
+/web_ui_server &
+WEBUI_PID=$!
+echo "Web UI started (PID: $WEBUI_PID, port: ${WEBUI_PORT})"
+
+# Wait for API to be ready
+sleep 2
+
+# Register subscription with API server if SUB_URL is set
+if [ -n "$SUB_URL" ] && [ -n "$SELECTED" ]; then
+    echo "Registering subscription with API server..."
+    # Extract server name from URL
+    SUB_NAME=$(echo "$SUB_URL" | grep -oP '(?<=/)[^/]+(?=/api)' || echo "Subscription")
+    
+    # Get all servers from subscription
+    SERVERS_JSON="["
+    FIRST=true
+    echo "$DECODED" | grep -oE '(hysteria2|vless|vmess|trojan|ss)://[^[:space:]\"<>,]+' | while IFS= read -r srv; do
+        [ -z "$srv" ] && continue
+        if [ "$FIRST" = true ]; then
+            FIRST=false
+        else
+            SERVERS_JSON="${SERVERS_JSON},"
+        fi
+        SERVERS_JSON="${SERVERS_JSON}\"${srv}\""
+    done
+    SERVERS_JSON="${SERVERS_JSON}]"
+    
+    # Register subscription
+    curl -s -X POST "http://127.0.0.1:${API_PORT}/api/subscriptions" \
+        -H "Content-Type: application/json" \
+        -d "{\"name\":\"${SUB_NAME}\",\"url\":\"${SUB_URL}\",\"servers\":${SERVERS_JSON}}" \
+        || true
+    
+    # Get subscription ID and activate
+    SUB_ID=$(curl -s "http://127.0.0.1:${API_PORT}/api/subscriptions" | jq -r '.subscriptions[0].id' 2>/dev/null || true)
+    if [ -n "$SUB_ID" ]; then
+        echo "Activating subscription: $SUB_ID"
+        curl -s -X POST "http://127.0.0.1:${API_PORT}/api/subscriptions/${SUB_ID}/activate" || true
+        
+        # Select server
+        SERVER_IDX=0
+        case "$SUB_SELECT" in
+            index:*|idx:*) SERVER_IDX=$(echo "$SUB_SELECT" | cut -d: -f2) ;;
+        esac
+        curl -s -X POST "http://127.0.0.1:${API_PORT}/api/servers/select" \
+            -H "Content-Type: application/json" \
+            -d "{\"index\":${SERVER_IDX}}" || true
+    fi
+fi
+
 # Wait for either process to exit
-wait -n $SINGBOX_PID $API_PID
+wait -n $SINGBOX_PID $API_PID $WEBUI_PID
 EXIT_CODE=$?
 if [ $EXIT_CODE -eq 0 ]; then
-    echo "sing-box exited, stopping API..."
-    kill $API_PID 2>/dev/null
+    echo "sing-box exited, stopping API and Web UI..."
+    kill $API_PID $WEBUI_PID 2>/dev/null
 else
-    echo "API exited, stopping sing-box..."
+    echo "API or Web UI exited, stopping sing-box..."
     kill $SINGBOX_PID 2>/dev/null
 fi
 wait

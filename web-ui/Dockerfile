@@ -14,5 +14,5 @@ RUN CGO_ENABLED=0 go build -o server .
 
 FROM scratch
 COPY --from=go-builder /build/server /server
-EXPOSE 8080
+EXPOSE 11501
 CMD ["/server"]
