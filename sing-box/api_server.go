@@ -734,20 +734,40 @@ func reloadSingbox() bool {
 		return false
 	}
 
-	// Send SIGHUP to reload config
+	// Kill sing-box process
 	process, err := os.FindProcess(pid)
 	if err != nil {
 		log.Printf("Failed to find sing-box process: %v", err)
 		return false
 	}
 
-	err = process.Signal(syscall.SIGHUP)
+	err = process.Signal(syscall.SIGTERM)
 	if err != nil {
-		log.Printf("Failed to send SIGHUP to sing-box: %v", err)
+		log.Printf("Failed to send SIGTERM to sing-box: %v", err)
 		return false
 	}
 
-	log.Printf("sing-box reloaded (PID: %d)", pid)
+	// Wait for process to exit
+	time.Sleep(500 * time.Millisecond)
+
+	// Restart sing-box
+	cmd := exec.Command("/sing-box", "run", "-c", cfg.ConfigFile)
+	cmd.Stdout = nil
+	cmd.Stderr = nil
+	cmd.Start()
+	if err != nil {
+		log.Printf("Failed to restart sing-box: %v", err)
+		return false
+	}
+
+	// Write new PID
+	newData := []byte(fmt.Sprintf("%d", cmd.Process.Pid))
+	if err := os.WriteFile(pidFile, newData, 0644); err != nil {
+		log.Printf("Failed to write new sing-box PID: %v", err)
+		return false
+	}
+
+	log.Printf("sing-box restarted (new PID: %d)", cmd.Process.Pid)
 	return true
 }
 
