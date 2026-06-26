@@ -56,6 +56,9 @@ jobs:
   go-lint:
     name: Go Lint
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        dir: [sing-box, web-ui]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -64,6 +67,7 @@ jobs:
       - uses: golangci/golangci-lint-action@v6
         with:
           version: latest
+          working-directory: ${{ matrix.dir }}
           args: --timeout=5m
           install-mode: "binary"
 
@@ -73,6 +77,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build sing-box image
-        run: docker build -f sing-box/Dockerfile -t mikrotik-sing-box:test sing-box
+        run: docker build -f sing-box/Dockerfile -t mikrotik-sing-box:test .
       - name: Build web-ui image
-        run: docker build -f web-ui/Dockerfile -t mikrotik-web-ui:test web-ui
+        run: docker build -f web-ui/Dockerfile -t mikrotik-web-ui:test .
