@@ -62,4 +62,7 @@ EXPOSE 9090/tcp
 EXPOSE 20123/tcp
 EXPOSE 11501/tcp
 
+# Persisted data (survives container remove/recreate)
+VOLUME ["/etc/sing-box"]
+
 ENTRYPOINT ["/entrypoint.sh"]
