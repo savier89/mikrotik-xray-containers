@@ -470,12 +470,10 @@ func parseServerConfig(rawURL string) map[string]interface{} {
 	if err != nil {
 		return map[string]interface{}{
 			"error": err.Error(),
-			"url":   rawURL,
 		}
 	}
 
 	config := map[string]interface{}{
-		"url":      rawURL,
 		"protocol": cfg.Protocol,
 		"server":   cfg.Server,
 		"port":     cfg.Port,
@@ -483,59 +481,54 @@ func parseServerConfig(rawURL string) map[string]interface{} {
 		"tls":      cfg.Security == "tls",
 	}
 
+	// Protocol-specific fields
 	switch cfg.Protocol {
-	case "vless":
+	case "vless", "vmess":
 		config["uuid"] = cfg.UUID
 		config["encryption"] = cfg.Encryption
 		config["security"] = cfg.Security
 		config["flow"] = cfg.Flow
-		config["transport"] = cfg.Transport
-		if cfg.Transport == "xhttp" || cfg.Transport == "ws" {
-			config["path"] = cfg.Path
-			config["host"] = cfg.Host
-		}
-		if cfg.Transport == "xhttp" {
-			config["mode"] = cfg.Mode
-			if cfg.Extra != "" {
-				var extraObj interface{}
-				if err := json.Unmarshal([]byte(cfg.Extra), &extraObj); err == nil {
-					config["extra"] = extraObj
-				} else {
-					config["extra"] = cfg.Extra
-				}
-			}
-		}
-		if cfg.Fingerprint != "" {
-			config["fingerprint"] = cfg.Fingerprint
-		}
-		if cfg.ALPN != "" {
-			config["alpn"] = cfg.ALPN
-		}
-	case "vmess":
-		config["uuid"] = cfg.UUID
-		config["encryption"] = cfg.Encryption
-		config["transport"] = cfg.Transport
-		if cfg.Transport == "ws" {
-			config["path"] = cfg.Path
-			config["host"] = cfg.Host
-		}
-	case "trojan":
+	case "trojan", "hysteria2":
 		config["password"] = cfg.Password
 		config["security"] = cfg.Security
-		config["transport"] = cfg.Transport
-		if cfg.Transport == "ws" {
-			config["path"] = cfg.Path
-			config["host"] = cfg.Host
-		}
-	case "hysteria2":
-		config["password"] = cfg.Password
-		config["insecure"] = cfg.Insecure
-		if cfg.PublicKey != "" {
-			config["obfs"] = "salamander"
-		}
 	case "shadowsocks":
 		config["method"] = cfg.Method
 		config["password"] = cfg.Password
+	}
+
+	// Transport
+	config["transport"] = cfg.Transport
+	if cfg.Transport != "" {
+		config["path"] = cfg.Path
+		config["host"] = cfg.Host
+	}
+	if cfg.Transport == "xhttp" {
+		config["mode"] = cfg.Mode
+		if cfg.Extra != "" {
+			var extraObj interface{}
+			if err := json.Unmarshal([]byte(cfg.Extra), &extraObj); err == nil {
+				config["extra"] = extraObj
+			} else {
+				config["extra"] = cfg.Extra
+			}
+		}
+	}
+
+	// TLS
+	if cfg.Fingerprint != "" {
+		config["fingerprint"] = cfg.Fingerprint
+	}
+	if cfg.ALPN != "" {
+		config["alpn"] = cfg.ALPN
+	}
+	if cfg.Insecure {
+		config["insecure"] = cfg.Insecure
+	}
+	if cfg.PublicKey != "" {
+		config["publicKey"] = cfg.PublicKey
+	}
+	if cfg.ShortID != "" {
+		config["shortId"] = cfg.ShortID
 	}
 
 	return config
