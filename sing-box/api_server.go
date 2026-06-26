@@ -1098,94 +1098,51 @@ func handleServerTestConfig(w http.ResponseWriter, body map[string]interface{}) 
 		return
 	}
 
-	// Create test config with the selected server
 	serverURL := sub.Servers[index].URL
-	server, port, uuid, sni, transport, path, host, mode, err := parseVlessURL(serverURL)
+	cfg, err := parseServerURL(serverURL)
 	if err != nil {
 		sendJSON(w, 400, map[string]interface{}{"error": err.Error()})
 		return
 	}
 
-	testConfig := map[string]interface{}{
-		"log": map[string]interface{}{
-			"level": "warn",
-		},
-		"dns": map[string]interface{}{
-			"servers": []map[string]interface{}{
-				{"tag": "dns", "server": "8.8.8.8", "type": "udp"},
-			},
-			"final": "dns",
-		},
-		"inbounds": []map[string]interface{}{
-			{"type": "direct", "tag": "direct-in"},
-		},
-		"outbounds": []map[string]interface{}{
-			{
-				"tag":             "test",
-				"type":            "vless",
-				"server":          server,
-				"server_port":     port,
-				"uuid":            uuid,
-				"packet_encoding": "xudp",
-				"tls": map[string]interface{}{
-					"enabled":     true,
-					"server_name": sni,
-					"utls":        map[string]interface{}{"enabled": true, "fingerprint": "chrome"},
-				},
-			},
-		},
-	}
-
-	// Add transport config if xhttp
-	if transport == "xhttp" {
-		if outbounds, ok := testConfig["outbounds"].([]map[string]interface{}); ok && len(outbounds) > 0 {
-			outbounds[0]["transport"] = map[string]interface{}{
-				"type":            "xhttp",
-				"host":            host,
-				"path":            path,
-				"mode":            mode,
-				"x_padding_bytes": "100-500",
-			}
-		}
-	}
-
-	configJSON, _ := json.Marshal(testConfig)
-	tmpFile := fmt.Sprintf("/tmp/test_config_%d.json", time.Now().UnixNano())
-	os.WriteFile(tmpFile, configJSON, 0644)
-	defer os.Remove(tmpFile)
-
-	// Test config validation first
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, "/sing-box", "check", "-c", tmpFile, "--disable-color")
-	output, err := cmd.CombinedOutput()
-
 	result := map[string]interface{}{
-		"valid":  err == nil,
-		"config": string(configJSON),
+		"valid": true,
 	}
 
+	// TCP dial
+	start := time.Now()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	addr := fmt.Sprintf("%s:%d", cfg.Server, cfg.Port)
+	dialer := net.Dialer{Timeout: 10 * time.Second}
+	conn, err := dialer.DialContext(ctx, "tcp", addr)
 	if err != nil {
-		result["message"] = string(output)
+		result["valid"] = false
+		result["message"] = fmt.Sprintf("Connection failed: TCP dial error: %v", err)
 		sendJSON(w, 200, result)
 		return
 	}
+	defer conn.Close()
 
-	// Test connection using sing-box tools connect
-	start := time.Now()
-	ctx2, cancel2 := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel2()
-	cmd2 := exec.CommandContext(ctx2, "/sing-box", "tools", "connect", "-c", tmpFile, "-o", "test", fmt.Sprintf("%s:%d", server, port))
-	output2, err2 := cmd2.CombinedOutput()
-	latency := int(time.Since(start).Milliseconds())
-
-	if err2 != nil {
-		result["message"] = fmt.Sprintf("Config valid, connection failed: %s", strings.TrimSpace(string(output2)))
-	} else {
-		result["message"] = "Config valid, connection successful"
-		result["latency"] = latency
+	// TLS handshake if needed
+	if cfg.Security == "tls" || cfg.Protocol == "trojan" || cfg.Protocol == "vless" {
+		tlsConfig := &tls.Config{
+			ServerName:         cfg.SNI,
+			InsecureSkipVerify: cfg.Insecure,
+		}
+		tlsConn := tls.Client(conn, tlsConfig)
+		if err := tlsConn.Handshake(); err != nil {
+			result["valid"] = false
+			result["message"] = fmt.Sprintf("Connection failed: TLS handshake error: %v", err)
+			sendJSON(w, 200, result)
+			return
+		}
+		conn = tlsConn
 	}
 
+	latency := int(time.Since(start).Milliseconds())
+	result["message"] = "Config valid, connection successful"
+	result["latency"] = latency
 	sendJSON(w, 200, result)
 }
 
