@@ -240,8 +240,7 @@ func isDirectServerURL(url string) bool {
 		strings.HasPrefix(url, "vmess://") ||
 		strings.HasPrefix(url, "trojan://") ||
 		strings.HasPrefix(url, "hysteria2://") ||
-		strings.HasPrefix(url, "ss://") ||
-		strings.HasPrefix(url, "http://")
+		strings.HasPrefix(url, "ss://")
 }
 
 func testServerLatency(serverURL string, timeout int) *int {
@@ -302,6 +301,9 @@ type ProtocolConfig struct {
 	PublicKey   string
 	ShortID     string
 	Insecure    bool
+	Extra       string // xhttp extra JSON
+	Fingerprint string // tls utls fingerprint
+	ALPN        string // tls alpn
 	Version     string // for ss
 	Method      string // for ss
 }
@@ -422,6 +424,12 @@ func parseServerURL(rawURL string) (*ProtocolConfig, error) {
 					cfg.Insecure = val == "1" || val == "true"
 				case "encryption":
 					cfg.Encryption = val
+				case "extra":
+					cfg.Extra = val
+				case "fp":
+					cfg.Fingerprint = val
+				case "alpn":
+					cfg.ALPN = val
 				}
 			}
 		}
@@ -488,6 +496,15 @@ func parseServerConfig(rawURL string) map[string]interface{} {
 		}
 		if cfg.Transport == "xhttp" {
 			config["mode"] = cfg.Mode
+			if cfg.Extra != "" {
+				config["extra"] = cfg.Extra
+			}
+		}
+		if cfg.Fingerprint != "" {
+			config["fingerprint"] = cfg.Fingerprint
+		}
+		if cfg.ALPN != "" {
+			config["alpn"] = cfg.ALPN
 		}
 	case "vmess":
 		config["uuid"] = cfg.UUID
