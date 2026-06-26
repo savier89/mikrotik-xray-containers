@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: sing-box/Dockerfile
-    image: test-sing-box-with-webui:latest
+    image: test-sing-box:latest
     container_name: test-sing-box
     environment:
       REMOTE_ADDRESS: "placeholder"

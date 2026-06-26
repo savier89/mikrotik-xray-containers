@@ -13,7 +13,7 @@ set -e
 
 # ===== Configuration =====
 REGISTRY="${REGISTRY:-localhost:5000}"
-PROJECT="mikrotik-xray"
+PROJECT="mikrotik-singbox"
 TAG="${TAG:-latest}"
 
 # ===== Architecture mapping =====
