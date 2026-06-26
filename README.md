@@ -52,9 +52,8 @@ chmod +x build.sh
 REGISTRY=192.168.1.100:5000 ./build.sh arm64
 ```
 
-Скрипт собирает два образа:
-- `mikrotik-singbox/sing-box:latest-{arch}` — sing-box + API + Web UI
-- `mikrotik-singbox/web-ui:latest-{arch}` — Web UI отдельно
+Скрипт собирает один образ:
+- `mikrotik-singbox/sing-box:latest-{arch}` — sing-box + API + Web UI (один контейнер)
 
 ### 3. Доступ к registry с MikroTik
 
