@@ -752,7 +752,7 @@ const Config = ({ data, loading, error, onReload }) => {
   const checkVpnStatus = async () => {
     setStatusLoading(true)
     try {
-      const connections = await API.getConnections()
+      const connections = await API.connections()
       const activeConns = connections?.connections?.filter(c => c.upload > 0 || c.download > 0) || []
       setVpnStatus({
         connected: activeConns.length > 0,

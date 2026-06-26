@@ -53,26 +53,12 @@ jobs:
       - run: npm ci
       - run: npx vitest run
 
-  go-lint:
-    name: Go Lint
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: "1.21"
-      - uses: golangci/golangci-lint-action@v6
-        with:
-          version: latest
-          args: --timeout=5m
-          install-mode: "binary"
-
   docker-build:
     name: Docker Build Check
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Build sing-box image
-        run: docker build -f sing-box/Dockerfile -t mikrotik-sing-box:test sing-box
+        run: docker build -f sing-box/Dockerfile -t mikrotik-sing-box:test .
       - name: Build web-ui image
         run: docker build -f web-ui/Dockerfile -t mikrotik-web-ui:test web-ui

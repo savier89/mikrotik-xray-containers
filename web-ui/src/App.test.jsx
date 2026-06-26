@@ -40,6 +40,8 @@ function mockError(status = 500) {
 describe('App - Dashboard', () => {
   beforeEach(() => {
     mockFetch.mockClear()
+    // Reset mock implementation to return connections by default
+    mockFetch.mockImplementation(() => mockResponse({ connections: [], uploadTotal: 0, downloadTotal: 0 }))
   })
 
   it('renders dashboard by default', async () => {
@@ -118,7 +120,7 @@ describe('App - Dashboard', () => {
 
   it('navigates to logs page', async () => {
     mockFetch.mockResolvedValueOnce(mockResponse({ uploadTotal: 0, downloadTotal: 0 }))
-    mockFetch.mockRejectedValue(new Error('API Error'))
+    mockFetch.mockResolvedValueOnce(mockResponse({ logs: [] }))
 
     render(<App />)
 
