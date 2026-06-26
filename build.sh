@@ -1,5 +1,5 @@
 #!/bin/bash
-# Build and push containers to local Docker registry
+# Build and push sing-box + web-ui containers to local Docker registry
 #
 # Usage:
 #   ./build.sh [ARCH]
@@ -45,8 +45,8 @@ if ! command -v docker &> /dev/null; then
     exit 1
 fi
 
-# ===== Build Xray container =====
-build_xray() {
+# ===== Build sing-box container =====
+build_singbox() {
     local arch="$1"
     local platform=""
 
@@ -56,9 +56,9 @@ build_xray() {
         arm)   platform="linux/arm/v7" ;;
     esac
 
-    local image_name="${REGISTRY}/${PROJECT}/xray:${TAG}-${arch}"
+    local image_name="${REGISTRY}/${PROJECT}/sing-box:${TAG}-${arch}"
 
-    log "Building Xray (${arch}, ${platform})..."
+    log "Building sing-box (${arch}, ${platform})..."
     log "Image: ${image_name}"
 
     docker buildx build \
@@ -67,17 +67,17 @@ build_xray() {
         --progress=plain \
         --tag "${image_name}" \
         --output=type=docker \
-        -f xray/Dockerfile \
-        xray/
+        -f sing-box/Dockerfile \
+        .
 
-    log "Pushing Xray (${arch}) to ${REGISTRY}..."
+    log "Pushing sing-box (${arch}) to ${REGISTRY}..."
     docker push "${image_name}"
-    log "Done: Xray (${arch})"
+    log "Done: sing-box (${arch})"
     echo ""
 }
 
-# ===== Build hev-socks5-tunnel container =====
-build_hev() {
+# ===== Build web-ui container =====
+build_webui() {
     local arch="$1"
     local platform=""
 
@@ -87,9 +87,9 @@ build_hev() {
         arm)   platform="linux/arm/v7" ;;
     esac
 
-    local image_name="${REGISTRY}/${PROJECT}/hev-socks5-tunnel:${TAG}-${arch}"
+    local image_name="${REGISTRY}/${PROJECT}/web-ui:${TAG}-${arch}"
 
-    log "Building hev-socks5-tunnel (${arch}, ${platform})..."
+    log "Building web-ui (${arch}, ${platform})..."
     log "Image: ${image_name}"
 
     docker buildx build \
@@ -98,18 +98,18 @@ build_hev() {
         --progress=plain \
         --tag "${image_name}" \
         --output=type=docker \
-        -f hev-socks5-tunnel/Dockerfile \
-        hev-socks5-tunnel/
+        -f web-ui/Dockerfile \
+        web-ui/
 
-    log "Pushing hev-socks5-tunnel (${arch}) to ${REGISTRY}..."
+    log "Pushing web-ui (${arch}) to ${REGISTRY}..."
     docker push "${image_name}"
-    log "Done: hev-socks5-tunnel (${arch})"
+    log "Done: web-ui (${arch})"
     echo ""
 }
 
 # ===== Main =====
 echo "========================================"
-echo " MikroTik Xray Container Builder"
+echo " MikroTik Sing-Box Container Builder"
 echo "========================================"
 echo "Registry: ${REGISTRY}"
 echo "Project:  ${PROJECT}"
@@ -125,8 +125,8 @@ if ! docker info 2>/dev/null | grep -q "Registry"; then
 fi
 
 for arch in ${ARCH_MAP}; do
-    build_xray "${arch}"
-    build_hev "${arch}"
+    build_singbox "${arch}"
+    build_webui "${arch}"
 done
 
 echo "========================================"
@@ -134,13 +134,13 @@ log "All images built and pushed!"
 echo "========================================"
 echo ""
 echo "Images in ${REGISTRY}:"
-echo "  ${PROJECT}/xray:${TAG}-amd64"
-echo "  ${PROJECT}/xray:${TAG}-arm64"
-echo "  ${PROJECT}/xray:${TAG}-arm"
-echo "  ${PROJECT}/hev-socks5-tunnel:${TAG}-amd64"
-echo "  ${PROJECT}/hev-socks5-tunnel:${TAG}-arm64"
-echo "  ${PROJECT}/hev-socks5-tunnel:${TAG}-arm"
+echo "  ${PROJECT}/sing-box:${TAG}-amd64"
+echo "  ${PROJECT}/sing-box:${TAG}-arm64"
+echo "  ${PROJECT}/sing-box:${TAG}-arm"
+echo "  ${PROJECT}/web-ui:${TAG}-amd64"
+echo "  ${PROJECT}/web-ui:${TAG}-arm64"
+echo "  ${PROJECT}/web-ui:${TAG}-arm"
 echo ""
 echo "On MikroTik, pull with:"
-echo "  /container remote-image=${REGISTRY}/${PROJECT}/xray:${TAG}-arm64"
-echo "  /container remote-image=${REGISTRY}/${PROJECT}/hev-socks5-tunnel:${TAG}-arm64"
+echo "  /container remote-image=${REGISTRY}/${PROJECT}/sing-box:${TAG}-arm64"
+echo "  /container remote-image=${REGISTRY}/${PROJECT}/web-ui:${TAG}-arm64"
