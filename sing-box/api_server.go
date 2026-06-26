@@ -587,27 +587,27 @@ func buildOutbound(cfg *ProtocolConfig) map[string]interface{} {
 		outbound["type"] = "vless"
 		outbound["uuid"] = cfg.UUID
 		outbound["flow"] = cfg.Flow
-		outbound["tls"] = buildTLS(cfg.SNI, cfg.Security, cfg.Insecure)
-		outbound["transport"] = buildTransport(cfg.Transport, cfg.Path, cfg.Host, cfg.Mode)
+		outbound["tls"] = buildTLS(cfg)
+		outbound["transport"] = buildTransport(cfg)
 
 	case "vmess":
 		outbound["type"] = "vmess"
 		outbound["uuid"] = cfg.UUID
 		outbound["security"] = cfg.Encryption
 		outbound["alter_id"] = 0
-		outbound["tls"] = buildTLS(cfg.SNI, cfg.Security, cfg.Insecure)
-		outbound["transport"] = buildTransport(cfg.Transport, cfg.Path, cfg.Host, cfg.Mode)
+		outbound["tls"] = buildTLS(cfg)
+		outbound["transport"] = buildTransport(cfg)
 
 	case "trojan":
 		outbound["type"] = "trojan"
 		outbound["password"] = cfg.Password
-		outbound["tls"] = buildTLS(cfg.SNI, cfg.Security, cfg.Insecure)
-		outbound["transport"] = buildTransport(cfg.Transport, cfg.Path, cfg.Host, cfg.Mode)
+		outbound["tls"] = buildTLS(cfg)
+		outbound["transport"] = buildTransport(cfg)
 
 	case "hysteria2":
 		outbound["type"] = "hysteria2"
 		outbound["password"] = cfg.Password
-		outbound["tls"] = buildTLS(cfg.SNI, cfg.Security, cfg.Insecure)
+		outbound["tls"] = buildTLS(cfg)
 		if cfg.PublicKey != "" {
 			outbound["obfs"] = map[string]interface{}{
 				"type":    "salamander",
@@ -624,67 +624,83 @@ func buildOutbound(cfg *ProtocolConfig) map[string]interface{} {
 	return outbound
 }
 
-// buildTLS creates TLS config
-func buildTLS(sni, security string, insecure bool) map[string]interface{} {
-	if security == "" || security == "none" {
+// buildTLS creates TLS config from ProtocolConfig
+func buildTLS(cfg *ProtocolConfig) map[string]interface{} {
+	if cfg.Security == "" || cfg.Security == "none" {
 		return nil
 	}
 
 	tls := map[string]interface{}{
 		"enabled":     true,
-		"server_name": sni,
-		"insecure":    insecure,
-		"utls": map[string]interface{}{
-			"enabled":     true,
-			"fingerprint": "chrome",
-		},
+		"server_name": cfg.SNI,
+		"insecure":    cfg.Insecure,
 	}
 
-	if security == "reality" {
+	// Add utls fingerprint if set
+	if cfg.Fingerprint != "" {
+		tls["utls"] = map[string]interface{}{
+			"enabled":     true,
+			"fingerprint": cfg.Fingerprint,
+		}
+	}
+
+	// Add ALPN if set
+	if cfg.ALPN != "" {
+		tls["alpn"] = []string{cfg.ALPN}
+	}
+
+	if cfg.Security == "reality" {
 		tls["reality"] = map[string]interface{}{
 			"enabled":    true,
-			"public_key": "", // Will be filled from URL params
+			"public_key": cfg.PublicKey,
 		}
 	}
 
 	return tls
 }
 
-// buildTransport creates transport config
-func buildTransport(transport, path, host, mode string) map[string]interface{} {
-	if transport == "" || transport == "tcp" {
+// buildTransport creates transport config from ProtocolConfig
+func buildTransport(cfg *ProtocolConfig) map[string]interface{} {
+	if cfg.Transport == "" || cfg.Transport == "tcp" {
 		return nil
 	}
 
 	tr := map[string]interface{}{
-		"type": transport,
+		"type": cfg.Transport,
 	}
 
-	switch transport {
+	switch cfg.Transport {
 	case "ws":
-		tr["path"] = path
-		if host != "" {
+		tr["path"] = cfg.Path
+		if cfg.Host != "" {
 			tr["headers"] = map[string]interface{}{
-				"Host": host,
+				"Host": cfg.Host,
 			}
 		}
 	case "grpc":
-		tr["path"] = path
+		tr["path"] = cfg.Path
 		tr["idle_timeout"] = "15s"
 		tr["ping_timeout"] = "15s"
 		tr["permit_without_stream"] = true
 	case "http", "xhttp":
-		tr["host"] = host
-		tr["path"] = path
-		if mode != "" {
-			tr["mode"] = mode
+		tr["host"] = cfg.Host
+		tr["path"] = cfg.Path
+		if cfg.Mode != "" {
+			tr["mode"] = cfg.Mode
 		}
-		if transport == "xhttp" {
-			tr["x_padding_bytes"] = "100-500"
+		// Parse extra for xhttp-specific settings
+		if cfg.Transport == "xhttp" && cfg.Extra != "" {
+			var extraObj map[string]interface{}
+			if err := json.Unmarshal([]byte(cfg.Extra), &extraObj); err == nil {
+				// xPaddingBytes
+				if padding, ok := extraObj["xPaddingBytes"]; ok {
+					tr["x_padding_bytes"] = padding
+				}
+			}
 		}
 	case "httpupgrade":
-		tr["host"] = host
-		tr["path"] = path
+		tr["host"] = cfg.Host
+		tr["path"] = cfg.Path
 	}
 
 	return tr
