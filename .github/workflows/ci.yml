@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  go-unit-tests:
+    name: Go Unit Tests
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        dir: [sing-box, web-ui]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.21"
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ matrix.dir }}-${{ hashFiles(format('{0}/go.sum', matrix.dir)) }}
+          restore-keys: |
+            ${{ runner.os }}-go-${{ matrix.dir }}-
+      - name: Download modules
+        run: cd ${{ matrix.dir }} && go mod download
+      - name: Vet
+        run: cd ${{ matrix.dir }} && go vet ./...
+      - name: Run unit tests (skip integration)
+        run: cd ${{ matrix.dir }} && go test -v -short -skip 'TestIntegration' ./...
+
+  react-tests:
+    name: React Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web-ui
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Cache npm
+        uses: actions/cache@v4
+        with:
+          path: web-ui/node_modules
+          key: ${{ runner.os }}-npm-${{ hashFiles('web-ui/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-npm-
+      - run: npm ci
+      - run: npx vitest run
+
+  go-lint:
+    name: Go Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.21"
+      - uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          args: --timeout=5m
+          install-mode: "binary"
+
+  docker-build:
+    name: Docker Build Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build sing-box image
+        run: docker build -f sing-box/Dockerfile -t mikrotik-sing-box:test sing-box
+      - name: Build web-ui image
+        run: docker build -f web-ui/Dockerfile -t mikrotik-web-ui:test web-ui
