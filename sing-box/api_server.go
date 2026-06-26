@@ -559,7 +559,7 @@ func updateSingboxOutbound(serverURL string) error {
 		return fmt.Errorf("failed to write config: %w", err)
 	}
 
-	log.Printf("Updated sing-box outbound: %s (protocol: %s, server: %s:%d)", serverCfg.Protocol, serverCfg.Server, serverCfg.Port)
+	log.Printf("Updated sing-box outbound (protocol: %s, server: %s:%d)", serverCfg.Protocol, serverCfg.Server, serverCfg.Port)
 	return nil
 }
 
