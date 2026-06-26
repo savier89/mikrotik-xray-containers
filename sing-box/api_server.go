@@ -589,6 +589,7 @@ func buildOutbound(cfg *ProtocolConfig) map[string]interface{} {
 		outbound["flow"] = cfg.Flow
 		outbound["tls"] = buildTLS(cfg)
 		outbound["transport"] = buildTransport(cfg)
+		outbound["packet_encoding"] = "xudp"
 
 	case "vmess":
 		outbound["type"] = "vmess"
@@ -695,6 +696,12 @@ func buildTransport(cfg *ProtocolConfig) map[string]interface{} {
 				// xPaddingBytes
 				if padding, ok := extraObj["xPaddingBytes"]; ok {
 					tr["x_padding_bytes"] = padding
+				}
+				// headers
+				if hdrs, ok := extraObj["headers"]; ok {
+					if h, ok := hdrs.(map[string]interface{}); ok && len(h) > 0 {
+						tr["headers"] = h
+					}
 				}
 			}
 		}
