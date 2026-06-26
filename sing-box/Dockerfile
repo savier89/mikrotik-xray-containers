@@ -17,9 +17,9 @@ WORKDIR /build
 RUN apk add --no-cache git binutils
 
 # Download and extract sing-box
-RUN wget -qO- "https://github.com/shtorm-7/sing-box-extended/releases/download/v1.13.12-extended-2.4.1/sing-box-1.13.12-extended-2.4.1-linux-${TARGETARCH}.tar.gz" \
-    | tar xz -C /tmp \
-    && mv /tmp/sing-box-1.13.12-extended-2.4.1-linux-${TARGETARCH}/sing-box /usr/local/bin/ \
+RUN wget -qO- "https://github.com/shtorm-7/sing-box-extended/releases/download/v1.13.14-extended-2.5.0/sing-box-1.13.14-extended-2.5.0-linux-${TARGETARCH}.tar.gz" \
+    | tar xz -C /tmp/ \
+    && mv /tmp/sing-box-1.13.14-extended-2.5.0-linux-${TARGETARCH}/sing-box /usr/local/bin/ \
     && rm -rf /tmp/sing-box-* \
     && strip /usr/local/bin/sing-box
 
